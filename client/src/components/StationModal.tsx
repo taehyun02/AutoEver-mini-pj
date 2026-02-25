@@ -48,6 +48,41 @@ export default function StationModal({ station, onClose }: StationModalProps) {
     }
   }, [station]);
 
+  // 매 분마다 현재 시간 기준으로 시간 슬롯 업데이트 (지남 상태 반영)
+  useEffect(() => {
+    if (!station) return;
+
+    const updateTimeSlotsForCurrentTime = () => {
+      const currentHour = new Date().getHours();
+      setTimeSlots(prev => prev.map(slot => {
+        // 이미 지난 시간이면 past로 변경
+        if (slot.hour < currentHour && slot.status !== "past") {
+          return { ...slot, status: "past" };
+        }
+        // 현재 시간이 되면 occupied로 변경 (선택된 상태는 유지)
+        if (slot.hour === currentHour && slot.status === "available") {
+          return { ...slot, status: "occupied" };
+        }
+        return slot;
+      }));
+      // 지난 시간 선택 해제
+      setSelectedSlots(prev => prev.filter(h => h > currentHour));
+    };
+
+    // 다음 정시까지 남은 시간 계산
+    const now = new Date();
+    const msUntilNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000;
+
+    // 다음 정시에 첫 업데이트 후 매 시간마다 업데이트
+    const timeout = setTimeout(() => {
+      updateTimeSlotsForCurrentTime();
+      const interval = setInterval(updateTimeSlotsForCurrentTime, 60 * 60 * 1000);
+      return () => clearInterval(interval);
+    }, msUntilNextHour);
+
+    return () => clearTimeout(timeout);
+  }, [station]);
+
   if (!station) return null;
 
   const toggleSlot = (hour: number) => {
