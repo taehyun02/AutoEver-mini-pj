@@ -1,8 +1,19 @@
 {
   "name": "ev-charging-wireframe",
   "version": "1.0.0",
-  "type": "module",
+  "description": "",
+  "homepage": "https://github.com/MODIFYC/wattup_FE#readme",
+  "bugs": {
+    "url": "https://github.com/MODIFYC/wattup_FE/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MODIFYC/wattup_FE.git"
+  },
   "license": "MIT",
+  "author": "",
+  "type": "module",
+  "main": "index.js",
   "scripts": {
     "dev": "vite --host",
     "build": "vite build && esbuild server/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist",

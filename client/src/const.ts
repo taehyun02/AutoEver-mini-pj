@@ -1,5 +1,9 @@
 export { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 
+// Naver Map API Keys
+export const NAVER_MAP_ID = import.meta.env.VITE_NAVER_MAP_ID || "";
+export const NAVER_MAP_KEY = import.meta.env.VITE_NAVER_MAP_KEY || "";
+
 // Generate login URL at runtime so redirect URI reflects the current origin.
 export const getLoginUrl = () => {
   const oauthPortalUrl = import.meta.env.VITE_OAUTH_PORTAL_URL;
