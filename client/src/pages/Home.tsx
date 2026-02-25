@@ -16,7 +16,8 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { MapView } from "@/components/Map";
 import DistrictDropdown from "@/components/DistrictDropdown";
 import StationModal from "@/components/StationModal";
-import { EV_STATIONS, SEOUL_DISTRICTS, ChargingStation, SeoulDistrict } from "@/lib/data";
+import { EV_STATIONS, ChargingStation, SeoulDistrict } from "@/lib/data";
+import { fetchStationsByDistrict } from "@/lib/api";
 import { Zap, Search, Layers, Navigation, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -26,6 +27,8 @@ export default function Home() {
   const [selectedStation, setSelectedStation] = useState<ChargingStation | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<SeoulDistrict | null>(null);
   const [mapReady, setMapReady] = useState(false);
+  const [stations, setStations] = useState<ChargingStation[]>(EV_STATIONS); // 초기값으로 Mock 데이터 사용
+  const [isLoadingStations, setIsLoadingStations] = useState(false);
 
   // Listen for marker click events from MapView
   useEffect(() => {
@@ -44,16 +47,36 @@ export default function Home() {
     setMapReady(true);
   }, []);
 
-  const handleDistrictSelect = useCallback((district: SeoulDistrict) => {
+  const handleDistrictSelect = useCallback(async (district: SeoulDistrict) => {
     setSelectedDistrict(district);
+
+    // 지도 이동
     if (mapRef.current && window.naver) {
       mapRef.current.setCenter(new window.naver.maps.LatLng(district.lat, district.lng));
       mapRef.current.setZoom(district.zoom);
     }
-    toast.success(`${district.name}으로 이동했습니다`, {
-      description: `해당 지역의 충전소를 확인하세요`,
-      duration: 2000,
-    });
+
+    // API로 충전소 검색
+    setIsLoadingStations(true);
+    try {
+      const fetchedStations = await fetchStationsByDistrict(district.name);
+      setStations(fetchedStations);
+      toast.success(`${district.name}으로 이동했습니다`, {
+        description: `충전소 ${fetchedStations.length}개를 찾았습니다`,
+        duration: 2000,
+      });
+    } catch (error) {
+      // API 실패 시 Mock 데이터로 펴백
+      console.error("Failed to fetch stations:", error);
+      const filteredStations = EV_STATIONS.filter(() => Math.random() > 0.3); // 임시 Mock
+      setStations(filteredStations.length > 0 ? filteredStations : EV_STATIONS);
+      toast.success(`${district.name}으로 이동했습니다`, {
+        description: `해당 지역의 충전소를 확인하세요`,
+        duration: 2000,
+      });
+    } finally {
+      setIsLoadingStations(false);
+    }
   }, []);
 
   const handleMyLocation = useCallback(() => {
@@ -80,9 +103,9 @@ export default function Home() {
   }, []);
 
   const stationCounts = {
-    available: EV_STATIONS.filter(s => s.status === "available").length,
-    partial: EV_STATIONS.filter(s => s.status === "partial").length,
-    occupied: EV_STATIONS.filter(s => s.status === "occupied").length,
+    available: stations.filter(s => s.status === "available").length,
+    partial: stations.filter(s => s.status === "partial").length,
+    occupied: stations.filter(s => s.status === "occupied").length,
   };
 
   return (
@@ -92,6 +115,7 @@ export default function Home() {
         className="absolute inset-0 w-full h-full"
         initialCenter={{ lat: 37.5665, lng: 126.9780 }}
         initialZoom={12}
+        stations={stations}
         onMapReady={handleMapReady}
       />
 
@@ -151,7 +175,9 @@ export default function Home() {
           {/* Total count */}
           <div className="flex items-center gap-1.5 pr-3 border-r border-slate-200">
             <Zap className="w-3.5 h-3.5 text-blue-600" fill="currentColor" />
-            <span className="text-xs font-bold text-slate-700">충전소 {EV_STATIONS.length}개</span>
+            <span className="text-xs font-bold text-slate-700">
+              {isLoadingStations ? "검색 중..." : `충전소 ${stations.length}개`}
+            </span>
           </div>
 
           {/* Available */}

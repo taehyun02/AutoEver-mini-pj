@@ -7,7 +7,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
-import { EV_STATIONS, ChargingStation } from "@/lib/data";
+import { ChargingStation } from "@/lib/data";
 
 declare global {
   interface Window {
@@ -19,6 +19,7 @@ interface MapViewProps {
   className?: string;
   initialCenter?: { lat: number; lng: number };
   initialZoom?: number;
+  stations?: ChargingStation[];
   onMapReady?: (map: any) => void;
   onStationClick?: (station: ChargingStation) => void;
 }
@@ -33,6 +34,7 @@ export function MapView({
   className,
   initialCenter = { lat: 37.5665, lng: 126.9780 },
   initialZoom = 12,
+  stations = [],
   onMapReady,
   onStationClick,
 }: MapViewProps) {
@@ -182,7 +184,7 @@ export function MapView({
     }
 
     // Create markers for each station
-    EV_STATIONS.forEach((station) => {
+    stations.forEach((station) => {
       const position = new window.naver.maps.LatLng(station.lat, station.lng);
       const markerContent = createMarkerContent(station, hoveredStation === station.id);
 
@@ -226,9 +228,9 @@ export function MapView({
 
       markersRef.current.push(marker);
     });
-  }, [onStationClick, hoveredStation]);
+  }, [stations, onStationClick, hoveredStation]);
 
-  // Update markers when map is loaded
+  // Update markers when map is loaded or stations change
   useEffect(() => {
     if (mapLoaded && mapRef.current) {
       addMarkers(mapRef.current);
