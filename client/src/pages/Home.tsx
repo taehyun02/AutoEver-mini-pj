@@ -1,10 +1,16 @@
 // Home.tsx - EV Charging Station Reservation Platform
 // Design: Modern Cartographic Theme
-// - Full-screen Google Map as background
+// - Full-screen Naver Map as background
 // - Floating UI panels over the map
 // - Left top: District dropdown
 // - Right side: Station detail modal (slide-in)
 // - Map pins with status colors and pulse animation
+
+declare global {
+  interface Window {
+    naver?: any;
+  }
+}
 
 import { useRef, useState, useEffect, useCallback } from "react";
 import { MapView } from "@/components/Map";
@@ -15,171 +21,33 @@ import { Zap, Search, Layers, Navigation, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-// Status color map for pins
-const PIN_STATUS_COLORS = {
-  available: { bg: "#10b981", border: "#059669", text: "#fff", ring: "rgba(16,185,129,0.3)" },
-  partial: { bg: "#f59e0b", border: "#d97706", text: "#fff", ring: "rgba(245,158,11,0.3)" },
-  occupied: { bg: "#ef4444", border: "#dc2626", text: "#fff", ring: "rgba(239,68,68,0.3)" },
-};
-
 export default function Home() {
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markersRef = useRef<google.maps.marker.AdvancedMarkerElement[]>([]);
+  const mapRef = useRef<any>(null); // naver.maps.Map
   const [selectedStation, setSelectedStation] = useState<ChargingStation | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<SeoulDistrict | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [hoveredStation, setHoveredStation] = useState<string | null>(null);
 
-  // 목업 마커 클릭 이벤트 수신
+  // Listen for marker click events from MapView
   useEffect(() => {
-    const handleMockMarkerClick = (e: CustomEvent<ChargingStation>) => {
+    const handleMarkerClick = (e: CustomEvent<ChargingStation>) => {
       setSelectedStation(e.detail);
     };
-    window.addEventListener("mock-marker-click", handleMockMarkerClick as EventListener);
+    window.addEventListener("naver-marker-click", handleMarkerClick as EventListener);
     return () => {
-      window.removeEventListener("mock-marker-click", handleMockMarkerClick as EventListener);
+      window.removeEventListener("naver-marker-click", handleMarkerClick as EventListener);
     };
   }, []);
 
   // Create custom pin element
-  const createPinElement = useCallback((station: ChargingStation, isHovered = false) => {
-    const colors = PIN_STATUS_COLORS[station.status];
-    const wrapper = document.createElement("div");
-    wrapper.style.cssText = `
-      position: relative;
-      cursor: pointer;
-      transition: transform 0.2s ease;
-      transform: ${isHovered ? "scale(1.2)" : "scale(1)"};
-    `;
-
-    // Ripple ring
-    const ripple = document.createElement("div");
-    ripple.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: 36px;
-      height: 36px;
-      border-radius: 50%;
-      background: ${colors.ring};
-      animation: ripple-anim 2s ease-out infinite;
-      pointer-events: none;
-    `;
-
-    // Main pin body
-    const pin = document.createElement("div");
-    pin.style.cssText = `
-      position: relative;
-      width: 36px;
-      height: 36px;
-      border-radius: 50% 50% 50% 0;
-      transform: rotate(-45deg);
-      background: ${colors.bg};
-      border: 2.5px solid ${colors.border};
-      box-shadow: 0 4px 12px ${colors.ring}, 0 2px 4px rgba(0,0,0,0.2);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      transition: all 0.2s ease;
-    `;
-
-    // Icon inside pin
-    const icon = document.createElement("div");
-    icon.style.cssText = `
-      transform: rotate(45deg);
-      color: ${colors.text};
-      font-size: 14px;
-      font-weight: bold;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      height: 100%;
-    `;
-    icon.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
-
-    // Slot count badge
-    const badge = document.createElement("div");
-    badge.style.cssText = `
-      position: absolute;
-      top: -6px;
-      right: -6px;
-      width: 18px;
-      height: 18px;
-      border-radius: 50%;
-      background: white;
-      border: 1.5px solid ${colors.border};
-      color: ${colors.bg};
-      font-size: 10px;
-      font-weight: 800;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: 'Pretendard', sans-serif;
-      transform: rotate(45deg);
-      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-    `;
-    badge.textContent = String(station.availableSlots);
-
-    pin.appendChild(icon);
-    pin.appendChild(badge);
-    wrapper.appendChild(ripple);
-    wrapper.appendChild(pin);
-
-    return wrapper;
-  }, []);
-
-  const handleMapReady = useCallback((map: google.maps.Map) => {
+  const handleMapReady = useCallback((map: any) => {
     mapRef.current = map;
     setMapReady(true);
-
-    // Add ripple animation style
-    const style = document.createElement("style");
-    style.textContent = `
-      @keyframes ripple-anim {
-        0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.6; }
-        100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
-      }
-    `;
-    document.head.appendChild(style);
-
-    // Place markers for all stations
-    EV_STATIONS.forEach((station) => {
-      const pinEl = createPinElement(station);
-
-      const marker = new google.maps.marker.AdvancedMarkerElement({
-        map,
-        position: { lat: station.lat, lng: station.lng },
-        title: station.name,
-        content: pinEl,
-      });
-
-      marker.addListener("click", () => {
-        setSelectedStation(station);
-      });
-
-      // Hover effects
-      marker.addListener("mouseover", () => {
-        setHoveredStation(station.id);
-        (marker.content as HTMLElement).style.transform = "scale(1.2)";
-        (marker.content as HTMLElement).style.zIndex = "100";
-      });
-
-      marker.addListener("mouseout", () => {
-        setHoveredStation(null);
-        (marker.content as HTMLElement).style.transform = "scale(1)";
-        (marker.content as HTMLElement).style.zIndex = "1";
-      });
-
-      markersRef.current.push(marker);
-    });
-  }, [createPinElement]);
+  }, []);
 
   const handleDistrictSelect = useCallback((district: SeoulDistrict) => {
     setSelectedDistrict(district);
-    if (mapRef.current) {
-      mapRef.current.panTo({ lat: district.lat, lng: district.lng });
+    if (mapRef.current && window.naver) {
+      mapRef.current.setCenter(new window.naver.maps.LatLng(district.lat, district.lng));
       mapRef.current.setZoom(district.zoom);
     }
     toast.success(`${district.name}으로 이동했습니다`, {
@@ -193,14 +61,18 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
-          mapRef.current?.panTo({ lat: latitude, lng: longitude });
-          mapRef.current?.setZoom(15);
+          if (mapRef.current && window.naver) {
+            mapRef.current.setCenter(new window.naver.maps.LatLng(latitude, longitude));
+            mapRef.current.setZoom(15);
+          }
           toast.success("현재 위치로 이동했습니다");
         },
         () => {
           // Fallback to Seoul center
-          mapRef.current?.panTo({ lat: 37.5665, lng: 126.9780 });
-          mapRef.current?.setZoom(12);
+          if (mapRef.current && window.naver) {
+            mapRef.current.setCenter(new window.naver.maps.LatLng(37.5665, 126.9780));
+            mapRef.current.setZoom(12);
+          }
           toast.info("위치 권한이 없어 서울 중심으로 이동합니다");
         }
       );
