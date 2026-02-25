@@ -227,14 +227,16 @@ export const EV_STATIONS: ChargingStation[] = [
 export function generateTimeSlots(stationId: string): TimeSlot[] {
   const now = new Date();
   const currentHour = now.getHours();
-  
+
   // Seed-based pseudo-random for consistent demo data per station
   const seed = stationId.charCodeAt(stationId.length - 1);
-  
+
   return Array.from({ length: 24 }, (_, i) => {
-    if (i < currentHour - 1) return { hour: i, status: "past" };
-    if (i === currentHour - 1 || i === currentHour) return { hour: i, status: "occupied" };
-    
+    // 현재 시간보다 이전의 모든 시간은 '지남'으로 표시
+    if (i < currentHour) return { hour: i, status: "past" };
+    // 현재 시간은 예약 불가 처리 (진행 중)
+    if (i === currentHour) return { hour: i, status: "occupied" };
+
     // Pseudo-random based on hour + seed
     const rand = ((i * 7 + seed * 13) % 10) / 10;
     if (rand < 0.3) return { hour: i, status: "occupied" };
