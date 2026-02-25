@@ -8,7 +8,7 @@
 import { useState, useEffect } from "react";
 import {
   X, Clock, Zap, Star, MapPin, ChevronRight,
-  Check, User, Car, Phone, Calendar, Info,
+  Check, Phone, Calendar, Info,
   ZapOff, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -31,20 +31,14 @@ const CHARGER_TYPE_COLORS: Record<string, { bg: string; text: string; border: st
 export default function StationModal({ station, onClose }: StationModalProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
-  const [form, setForm] = useState({
-    name: "",
-    phone: "",
-    carNumber: "",
-    carModel: "",
-    chargerType: "",
-  });
+  const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     if (station) {
       setTimeSlots(generateTimeSlots(station.id));
       setSelectedSlots([]);
-      setForm({ name: "", phone: "", carNumber: "", carModel: "", chargerType: "" });
+      setPhone("");
     }
   }, [station]);
 
@@ -76,25 +70,61 @@ export default function StationModal({ station, onClose }: StationModalProps) {
       toast.error("예약 시간을 선택해주세요.");
       return;
     }
-    if (!form.name || !form.phone || !form.carNumber) {
-      toast.error("필수 정보를 모두 입력해주세요.");
+
+    // 전화번호 검증 (숫자만, 10-11자리)
+    const cleanPhone = phone.replace(/[^0-9]/g, "");
+    if (!cleanPhone || cleanPhone.length < 10 || cleanPhone.length > 11) {
+      toast.error("올바른 연락처를 입력해주세요.");
       return;
     }
 
+    // 연속된 시간 슬롯의 시작과 끝 계산
+    const sortedSlots = [...selectedSlots].sort((a, b) => a - b);
+    const startDt = sortedSlots[0];
+    const endDt = sortedSlots[sortedSlots.length - 1] + 1; // 종료 시간은 마지막 슬롯 + 1
+
+    const requestBody = {
+      stat_id: station.id,
+      user_id: cleanPhone,
+      start_dt: startDt,
+      end_dt: endDt,
+    };
+
     setIsSubmitting(true);
-    await new Promise(r => setTimeout(r, 1200));
-    setIsSubmitting(false);
 
-    const timeRange = selectedSlots.length > 0
-      ? `${String(selectedSlots[0]).padStart(2, "0")}:00 ~ ${String(selectedSlots[selectedSlots.length - 1] + 1).padStart(2, "0")}:00`
-      : "";
+    try {
+      // TODO: 실제 API 연동 시 아래 주석 해제
+      // const response = await fetch('/api/reservations', {
+      //   method: 'POST',
+      //   headers: { 'Content-Type': 'application/json' },
+      //   body: JSON.stringify(requestBody),
+      // });
+      // const data = await response.json();
 
-    toast.success(`예약이 완료되었습니다! ${timeRange}`, {
-      description: `${station.name} · ${form.carNumber}`,
-      duration: 4000,
-    });
+      // Mock API response
+      await new Promise(r => setTimeout(r, 1200));
+      const mockResponse = {
+        reserv_id: `01AN4Z07BY79KA1307SR9X4MV3`,
+        status: "READY",
+        message: "예약이 완료되었습니다.",
+      };
 
-    onClose();
+      console.log("예약 요청:", requestBody);
+      console.log("예약 응답:", mockResponse);
+
+      const timeRange = `${String(startDt).padStart(2, "0")}:00 ~ ${String(endDt).padStart(2, "0")}:00`;
+
+      toast.success(`${mockResponse.message} ${timeRange}`, {
+        description: `${station.name} · 예약번호: ${mockResponse.reserv_id.slice(-8)}`,
+        duration: 4000,
+      });
+
+      onClose();
+    } catch (error) {
+      toast.error("예약 중 오류가 발생했습니다. 다시 시도해주세요.");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const formatHour = (h: number) => `${String(h).padStart(2, "0")}:00`;
@@ -334,28 +364,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           </div>
 
           <div className="space-y-2.5">
-            {/* Name */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1">
-                <User className="w-3 h-3" />
-                이름 <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-                placeholder="홍길동"
-                className={cn(
-                  "w-full px-3 py-2.5 rounded-xl text-sm",
-                  "border border-slate-200 bg-slate-50",
-                  "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
-                  "placeholder:text-slate-300 text-slate-800",
-                  "transition-all duration-150"
-                )}
-              />
-            </div>
-
-            {/* Phone */}
+            {/* Phone (user_id) */}
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1">
                 <Phone className="w-3 h-3" />
@@ -363,9 +372,10 @@ export default function StationModal({ station, onClose }: StationModalProps) {
               </label>
               <input
                 type="tel"
-                value={form.phone}
-                onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                placeholder="010-0000-0000"
+                value={phone}
+                onChange={e => setPhone(e.target.value)}
+                placeholder="01012345678"
+                maxLength={13}
                 className={cn(
                   "w-full px-3 py-2.5 rounded-xl text-sm",
                   "border border-slate-200 bg-slate-50",
@@ -374,75 +384,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
                   "transition-all duration-150"
                 )}
               />
-            </div>
-
-            {/* Car Number */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1">
-                <Car className="w-3 h-3" />
-                차량 번호 <span className="text-red-400">*</span>
-              </label>
-              <input
-                type="text"
-                value={form.carNumber}
-                onChange={e => setForm(f => ({ ...f, carNumber: e.target.value }))}
-                placeholder="12가 3456"
-                className={cn(
-                  "w-full px-3 py-2.5 rounded-xl text-sm",
-                  "border border-slate-200 bg-slate-50",
-                  "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
-                  "placeholder:text-slate-300 text-slate-800",
-                  "transition-all duration-150"
-                )}
-              />
-            </div>
-
-            {/* Car Model */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1">
-                <Car className="w-3 h-3" />
-                차량 모델
-              </label>
-              <input
-                type="text"
-                value={form.carModel}
-                onChange={e => setForm(f => ({ ...f, carModel: e.target.value }))}
-                placeholder="현대 아이오닉 6"
-                className={cn(
-                  "w-full px-3 py-2.5 rounded-xl text-sm",
-                  "border border-slate-200 bg-slate-50",
-                  "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
-                  "placeholder:text-slate-300 text-slate-800",
-                  "transition-all duration-150"
-                )}
-              />
-            </div>
-
-            {/* Charger Type Select */}
-            <div>
-              <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1">
-                <Zap className="w-3 h-3" />
-                충전기 종류
-              </label>
-              <select
-                value={form.chargerType}
-                onChange={e => setForm(f => ({ ...f, chargerType: e.target.value }))}
-                className={cn(
-                  "w-full px-3 py-2.5 rounded-xl text-sm",
-                  "border border-slate-200 bg-slate-50",
-                  "focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400",
-                  "text-slate-800",
-                  "transition-all duration-150",
-                  !form.chargerType && "text-slate-300"
-                )}
-              >
-                <option value="" disabled>충전기 종류 선택</option>
-                {station.chargerTypes.map(ct => (
-                  <option key={ct.type} value={ct.type}>
-                    {ct.type} (최대 {ct.maxKw}kW)
-                  </option>
-                ))}
-              </select>
+              <p className="text-xs text-slate-400 mt-1">예약 확인 및 안내에 사용됩니다</p>
             </div>
           </div>
         </div>
@@ -468,12 +410,12 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           {/* Confirm Button */}
           <button
             onClick={handleSubmit}
-            disabled={isSubmitting || selectedSlots.length === 0 || !form.name || !form.phone || !form.carNumber}
+            disabled={isSubmitting || selectedSlots.length === 0 || !phone}
             className={cn(
               "w-14 h-14 rounded-full flex items-center justify-center",
               "shadow-xl transition-all duration-200",
               "disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-md",
-              selectedSlots.length > 0 && form.name && form.phone && form.carNumber
+              selectedSlots.length > 0 && phone
                 ? "bg-blue-600 hover:bg-blue-700 hover:scale-105 shadow-blue-300"
                 : "bg-slate-300"
             )}
