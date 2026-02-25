@@ -31,6 +31,7 @@ const CHARGER_TYPE_COLORS: Record<string, { bg: string; text: string; border: st
 export default function StationModal({ station, onClose }: StationModalProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
+  const [startHour, setStartHour] = useState<number | null>(null); // 시작 시간
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -38,6 +39,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
     if (station) {
       setTimeSlots(generateTimeSlots(station.id));
       setSelectedSlots([]);
+      setStartHour(null);
       setPhone("");
     }
   }, [station]);
@@ -61,6 +63,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
       }));
       // 지난 시간 선택 해제
       setSelectedSlots(prev => prev.filter(h => h > currentHour));
+      setStartHour(prev => (prev !== null && prev <= currentHour) ? null : prev);
     };
 
     // 다음 정시까지 남은 시간 계산
@@ -83,21 +86,53 @@ export default function StationModal({ station, onClose }: StationModalProps) {
     const slot = timeSlots.find(s => s.hour === hour);
     if (!slot || slot.status === "occupied" || slot.status === "past") return;
 
-    setSelectedSlots(prev => {
-      const updated = prev.includes(hour)
-        ? prev.filter(h => h !== hour)
-        : [...prev, hour].sort((a, b) => a - b);
+    // 이미 선택된 범위를 클릭하면 초기화
+    if (selectedSlots.length > 0 && selectedSlots.includes(hour)) {
+      setSelectedSlots([]);
+      setStartHour(null);
+      setTimeSlots(ts => ts.map(s =>
+        s.status === "selected" ? { ...s, status: "available" } : s
+      ));
+      return;
+    }
 
-      // Update time slots display
-      setTimeSlots(ts => ts.map(s => {
-        if (s.hour === hour) {
-          return { ...s, status: updated.includes(hour) ? "selected" : "available" };
-        }
-        return s;
-      }));
+    if (startHour === null) {
+      // 첫 번째 클릭: 시작 시간 설정
+      setStartHour(hour);
+      setSelectedSlots([hour]);
+      setTimeSlots(ts => ts.map(s =>
+        s.hour === hour ? { ...s, status: "selected" } :
+          s.status === "selected" ? { ...s, status: "available" } : s
+      ));
+    } else {
+      // 두 번째 클릭: 시작~끝 사이의 모든 시간 선택
+      const minHour = Math.min(startHour, hour);
+      const maxHour = Math.max(startHour, hour);
 
-      return updated;
-    });
+      // 범위 내에 occupied나 past 슬롯이 있는지 확인
+      const hasBlockedSlot = timeSlots.some(s =>
+        s.hour >= minHour && s.hour <= maxHour && (s.status === "occupied" || s.status === "past")
+      );
+
+      if (hasBlockedSlot) {
+        toast.error("선택한 범위 내에 예약 불가능한 시간이 있습니다.");
+        return;
+      }
+
+      // 범위 내 모든 시간 선택
+      const newSelectedSlots: number[] = [];
+      for (let h = minHour; h <= maxHour; h++) {
+        newSelectedSlots.push(h);
+      }
+
+      setSelectedSlots(newSelectedSlots);
+      setStartHour(null); // 선택 완료 후 리셋
+      setTimeSlots(ts => ts.map(s => ({
+        ...s,
+        status: newSelectedSlots.includes(s.hour) ? "selected" :
+          (s.status === "selected" ? "available" : s.status)
+      })));
+    }
   };
 
   const handleSubmit = async () => {
