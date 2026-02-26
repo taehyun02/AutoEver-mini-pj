@@ -56,7 +56,7 @@ export async function fetchStationsByDistrict(
 
     try {
         const response = await fetch(
-            `${API_BASE_URL}/stations?region=${encodeURIComponent(districtName)}`,
+            `${API_BASE_URL}/wattup/map/${districtName}`,
             {
                 method: "GET",
                 headers: {

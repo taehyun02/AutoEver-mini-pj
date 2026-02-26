@@ -163,29 +163,26 @@ export default function StationModal({ station, onClose }: StationModalProps) {
     setIsSubmitting(true);
 
     try {
-      // TODO: 실제 API 연동 시 아래 주석 해제
-      // const response = await fetch('/api/reservations', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(requestBody),
-      // });
-      // const data = await response.json();
+      const response = await fetch('/api/wattup/reservations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      });
 
-      // Mock API response
-      await new Promise(r => setTimeout(r, 1200));
-      const mockResponse = {
-        reserv_id: `01AN4Z07BY79KA1307SR9X4MV3`,
-        status: "READY",
-        message: "예약이 완료되었습니다.",
-      };
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || '예약 요청에 실패했습니다.');
+      }
+
+      const apiResponse = await response.json();
 
       console.log("예약 요청:", requestBody);
-      console.log("예약 응답:", mockResponse);
+      console.log("예약 응답:", apiResponse);
 
       const timeRange = `${String(startDt).padStart(2, "0")}:00 ~ ${String(endDt).padStart(2, "0")}:00`;
 
-      toast.success(`${mockResponse.message} ${timeRange}`, {
-        description: `${station.name} · 예약번호: ${mockResponse.reserv_id.slice(-8)}`,
+      toast.success(`${apiResponse.message} ${timeRange}`, {
+        description: `${station.name} · 예약번호: ${apiResponse.reserv_id.slice(-8)}`,
         duration: 4000,
       });
 
