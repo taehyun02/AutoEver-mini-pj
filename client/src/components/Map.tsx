@@ -41,6 +41,9 @@ export function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
+  const currentLocationMarkerRef = useRef<any>(null);
+  const geoWatchIdRef = useRef<number | null>(null);
+  const accuracyCircleRef = useRef<any>(null);
   const [mapLoaded, setMapLoaded] = useState(false);
   const [hoveredStation, setHoveredStation] = useState<string | null>(null);
   const [currentZoom, setCurrentZoom] = useState(initialZoom);
@@ -73,6 +76,9 @@ export function MapView({
 
           // Add markers for all stations
           addMarkers(map, map.getZoom());
+
+          // Start geolocation marker
+          startGeolocation(map);
         }
       } else if (typeof window !== "undefined" && !window.naver) {
         // Naver Maps not loaded yet, try again
@@ -81,6 +87,23 @@ export function MapView({
     };
 
     checkNaverMaps();
+    // Listen for external start/stop geolocation requests
+    const handleStart = () => {
+      if (mapRef.current) startGeolocation(mapRef.current);
+    };
+    const handleStop = () => {
+      stopGeolocation();
+    };
+
+    window.addEventListener("naver-start-geolocation", handleStart);
+    window.addEventListener("naver-stop-geolocation", handleStop);
+
+    return () => {
+      // cleanup geolocation on unmount
+      stopGeolocation();
+      window.removeEventListener("naver-start-geolocation", handleStart);
+      window.removeEventListener("naver-stop-geolocation", handleStop);
+    };
   }, [initialCenter, initialZoom, onMapReady]);
 
   const createIndividualMarkerContent = (station: ChargingStation, isHovered: boolean = false) => {
@@ -248,6 +271,151 @@ export function MapView({
     container.appendChild(pin);
 
     return container;
+  };
+
+  const createCurrentLocationContent = (size = 18) => {
+    const container = document.createElement("div");
+    container.style.cssText = `
+      position: relative;
+      width: ${size}px;
+      height: ${size}px;
+      transform: translate(-50%, -50%);
+      pointer-events: none;
+    `;
+
+    const outer = document.createElement("div");
+    outer.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: ${size * 2}px;
+      height: ${size * 2}px;
+      border-radius: 50%;
+      background: rgba(16,185,129,0.10);
+      animation: pulse 2s infinite ease-out;
+      pointer-events: none;
+    `;
+
+    const inner = document.createElement("div");
+    inner.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: ${size}px;
+      height: ${size}px;
+      border-radius: 50%;
+      background: #10b981;
+      border: 2px solid #fff;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+      pointer-events: none;
+    `;
+
+    container.appendChild(outer);
+    container.appendChild(inner);
+
+    // Ensure keyframes exist
+    if (!document.getElementById("naver-current-pulse-style")) {
+      const style = document.createElement("style");
+      style.id = "naver-current-pulse-style";
+      style.textContent = `
+        @keyframes pulse {
+          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.6; }
+          70% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+          100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+        }
+      `;
+      document.head.appendChild(style);
+    }
+
+    return container;
+  };
+
+  const startGeolocation = (map: any) => {
+    if (!navigator.geolocation || !map) return;
+
+    // Stop previous watcher if any
+    if (geoWatchIdRef.current != null) {
+      navigator.geolocation.clearWatch(geoWatchIdRef.current);
+      geoWatchIdRef.current = null;
+    }
+
+    geoWatchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        const position = new window.naver.maps.LatLng(lat, lng);
+
+        // Create marker if not exists
+        if (!currentLocationMarkerRef.current) {
+          const marker = new window.naver.maps.Marker({
+            position,
+            map,
+            icon: {
+              content: createCurrentLocationContent(18),
+              anchor: new window.naver.maps.Point(9, 9),
+            },
+            clickable: false,
+            zIndex: 9999,
+          });
+          currentLocationMarkerRef.current = marker;
+        } else {
+          currentLocationMarkerRef.current.setPosition(position);
+          currentLocationMarkerRef.current.setIcon({
+            content: createCurrentLocationContent(18),
+            anchor: new window.naver.maps.Point(9, 9),
+          });
+        }
+
+        // Optionally update accuracy circle using naver.maps.Circle if available
+        try {
+          if (pos.coords.accuracy && window.naver?.maps) {
+            const radius = pos.coords.accuracy; // meters
+            if (!accuracyCircleRef.current) {
+              accuracyCircleRef.current = new window.naver.maps.Circle({
+                map,
+                center: position,
+                radius,
+                strokeColor: "rgba(16,185,129,0.2)",
+                strokeOpacity: 0.8,
+                strokeWeight: 1,
+                fillColor: "rgba(16,185,129,0.06)",
+                fillOpacity: 0.6,
+              });
+            } else {
+              accuracyCircleRef.current.setCenter(position);
+              accuracyCircleRef.current.setRadius(radius);
+            }
+          }
+        } catch (e) {
+          // ignore if naver.maps.Circle is not available
+        }
+      },
+      (err) => {
+        // ignore geolocation errors for now
+      },
+      { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 }
+    );
+  };
+
+  const stopGeolocation = () => {
+    if (geoWatchIdRef.current != null && navigator.geolocation) {
+      navigator.geolocation.clearWatch(geoWatchIdRef.current);
+      geoWatchIdRef.current = null;
+    }
+    if (currentLocationMarkerRef.current) {
+      try {
+        currentLocationMarkerRef.current.setMap(null);
+      } catch (e) { }
+      currentLocationMarkerRef.current = null;
+    }
+    if (accuracyCircleRef.current) {
+      try {
+        accuracyCircleRef.current.setMap(null);
+      } catch (e) { }
+      accuracyCircleRef.current = null;
+    }
   };
 
 
