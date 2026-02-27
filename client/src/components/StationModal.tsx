@@ -219,12 +219,25 @@ export default function StationModal({ station, onClose }: StationModalProps) {
       {/* ─── Header ─── */}
       <div className="relative flex-shrink-0">
         {/* Station Photo */}
-        <div className="relative h-44 overflow-hidden">
-          <img
-            src={station.photo}
-            alt={station.name}
-            className="w-full h-full object-cover"
-          />
+        <div className="relative h-44 overflow-hidden bg-slate-200 flex items-center justify-center">
+          {station.photo ? (
+            <img
+              src={station.photo}
+              alt={station.name}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement;
+                target.src = "/default-station.jpg";
+                target.onerror = null; // Infinite loop prevention
+              }}
+            />
+          ) : (
+            <img
+              src="/default-station.jpg"
+              alt="Default Station"
+              className="w-full h-full object-cover"
+            />
+          )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
           {/* Close Button */}
