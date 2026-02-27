@@ -99,18 +99,16 @@ export default function DistrictDropdown({ selectedDistrict, onSelect }: Distric
                   key={district.name}
                   onClick={() => handleSelect(district)}
                   className={cn(
-                    "px-1 py-2 rounded-lg text-xs font-medium",
+                    "py-2 rounded-lg text-[11px] font-medium whitespace-nowrap",
                     "transition-all duration-150",
-                    "border",
+                    "border flex items-center justify-center gap-0.5",
                     isSelected
                       ? "bg-blue-600 text-white border-blue-600 shadow-md shadow-blue-200"
                       : "bg-slate-50 text-slate-700 border-slate-200 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700"
                   )}
                 >
-                  {district.name.slice(0, -1)}
-                  <span className={cn("block text-[9px] mt-0.5", isSelected ? "text-blue-100" : "text-slate-400")}>
-                    구
-                  </span>
+                  <span>{district.name}</span>
+
                 </button>
               );
             })}

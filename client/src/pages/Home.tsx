@@ -127,7 +127,7 @@ export default function Home() {
             <Zap className="w-4 h-4 text-white" fill="white" />
           </div>
           <div>
-            <div className="text-white font-bold text-sm leading-none">ChargeNow</div>
+            <div className="text-white font-bold text-sm leading-none">Watt-up</div>
             <div className="text-blue-200 text-[10px] leading-none mt-0.5">전기차 충전소 예약</div>
           </div>
         </div>
@@ -208,7 +208,7 @@ export default function Home() {
               <Zap className="w-8 h-8 text-white" fill="white" />
             </div>
             <div className="text-center">
-              <div className="text-lg font-bold text-slate-800">ChargeNow</div>
+              <div className="text-lg font-bold text-slate-800">Watt-up</div>
               <div className="text-sm text-slate-500 mt-1">지도를 불러오는 중...</div>
             </div>
             <div className="flex gap-1">
