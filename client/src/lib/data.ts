@@ -356,7 +356,7 @@ export const EV_STATIONS: ChargingStation[] = [
   },
   {
     id: "stn-016",
-    name: "시흥사거리 무지개아파트 상가",
+    name: "시흥사거리 무지개 아파트 상가",
     address: "서울 금천구 시흥대로 251",
     lat: 37.4512,
     lng: 126.9015,
