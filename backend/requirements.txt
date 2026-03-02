@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+pydantic-settings
+SQLAlchemy
+psycopg2-binary
+pymongo
+ulid-py==1.1.0
+python-dotenv

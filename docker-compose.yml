@@ -1,0 +1,194 @@
+services:
+  # ==========================================
+  # 1. 메인 데이터베이스 스택
+  # ==========================================
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: ev-postgres
+    # 🚨 CDC(Debezium)를 위한 필수 설정: WAL 레벨을 logical로 변경
+    command: ["postgres", "-c", "wal_level=logical"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    ports:
+      - "${POSTGRES_PORT}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - ev-network
+
+  mongo:
+    image: mongo:7
+    container_name: ev-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD}
+    ports:
+      - "${MONGO_PORT}:27017"
+    volumes:
+      - mongodata:/data/db
+    networks:
+      - ev-network
+
+  # ==========================================
+  # 2. 데이터 초기 적재용 앱 (FastAPI)
+  # ==========================================
+  importer:
+    build:
+      context: ./importer
+    container_name: ev-importer
+    env_file:
+      - .env
+    ports:
+      - "8000:8000" #backend 포트랑 같을 수 있음 주의하자
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - ev-network
+
+  # ==========================================
+  # 3-Node Kafka Cluster (KRaft Mode) + CDC
+  # ==========================================
+  kafka-1:
+    image: apache/kafka:3.8.0
+    container_name: ev-kafka-1
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_NODE_ID: "1"
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-1:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_METADATA_LOG_DIR: "/var/lib/kafka/metadata"
+    volumes:
+      - kafkadata1:/var/lib/kafka
+    networks:
+      - ev-network
+
+  kafka-2:
+    image: apache/kafka:3.8.0
+    container_name: ev-kafka-2
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_NODE_ID: "2"
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-2:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_METADATA_LOG_DIR: "/var/lib/kafka/metadata"
+    volumes:
+      - kafkadata2:/var/lib/kafka
+    networks:
+      - ev-network
+
+  kafka-3:
+    image: apache/kafka:3.8.0
+    container_name: ev-kafka-3
+    restart: unless-stopped
+    environment:
+      KAFKA_CLUSTER_ID: 'MkU3OEVBNTcwNTJENDM2Qk'
+      KAFKA_NODE_ID: "3"
+      KAFKA_PROCESS_ROLES: "controller,broker"
+      KAFKA_LISTENERS: "PLAINTEXT://:9092,CONTROLLER://:9093"
+      KAFKA_ADVERTISED_LISTENERS: "PLAINTEXT://kafka-3:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka-1:9093,2@kafka-2:9093,3@kafka-3:9093"
+      KAFKA_CONTROLLER_LISTENER_NAMES: "CONTROLLER"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "PLAINTEXT"
+      KAFKA_LOG_DIRS: "/var/lib/kafka/data"
+      KAFKA_METADATA_LOG_DIR: "/var/lib/kafka/metadata"
+    volumes:
+      - kafkadata3:/var/lib/kafka
+    networks:
+      - ev-network
+
+  kafka-ui:
+    image: provectuslabs/kafka-ui:latest
+    container_name: ev-kafka-ui
+    ports:
+      - "8081:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: "ev-cluster"
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: "kafka-1:9092,kafka-2:9092,kafka-3:9092"
+    depends_on:
+      kafka-1:
+        condition: service_started
+      kafka-2:
+        condition: service_started
+      kafka-3:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ev-network
+
+  debezium:
+    build: ./debezium
+    container_name: ev-debezium
+    ports:
+      - "8083:8083"
+    environment:
+      - BOOTSTRAP_SERVERS=kafka-1:9092,kafka-2:9092,kafka-3:9092
+      - GROUP_ID=1
+      - CONFIG_STORAGE_TOPIC=my_connect_configs
+      - OFFSET_STORAGE_TOPIC=my_connect_offsets
+      - STATUS_STORAGE_TOPIC=my_connect_statuses
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka-1:
+        condition: service_started
+      kafka-2:
+        condition: service_started
+      kafka-3:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - ev-network
+  
+  backend:
+    build:
+      context: ./backend
+    container_name: ev-backend
+    env_file: [.env]
+    ports:
+      - "8001:8000"
+    depends_on:
+      postgres: { condition: service_healthy }
+      mongo: { condition: service_started }
+      kafka-1: { condition: service_started }
+    restart: unless-stopped
+    networks: [ev-network]
+
+# ==========================================
+# 4. 볼륨 및 네트워크 정의
+# ==========================================
+volumes:
+  pgdata:
+  mongodata:
+  kafkadata1:
+  kafkadata2:
+  kafkadata3:
+
+networks:
+  ev-network:
+    name: ev-network
+    driver: bridge
