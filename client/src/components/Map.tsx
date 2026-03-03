@@ -30,6 +30,11 @@ const STATUS_COLORS = {
   occupied: { bg: "#ef4444", border: "#dc2626", text: "#fff", ring: "rgba(239,68,68,0.3)" },
 };
 
+// Current location marker constants
+const CURRENT_LOCATION_SIZE = 50;
+const CURRENT_LOCATION_ANCHOR_X = 25;
+const CURRENT_LOCATION_ANCHOR_Y = 25;
+
 export function MapView({
   className,
   initialCenter = { lat: 37.5665, lng: 126.9780 },
@@ -273,61 +278,92 @@ export function MapView({
     return container;
   };
 
-  const createCurrentLocationContent = (size = 18) => {
+  const createCurrentLocationContent = (size = CURRENT_LOCATION_SIZE) => {
     const container = document.createElement("div");
     container.style.cssText = `
       position: relative;
       width: ${size}px;
       height: ${size}px;
-      transform: translate(-50%, -50%);
       pointer-events: none;
     `;
 
-    const outer = document.createElement("div");
-    outer.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: ${size * 2}px;
-      height: ${size * 2}px;
-      border-radius: 50%;
-      background: rgba(16,185,129,0.10);
-      animation: pulse 2s infinite ease-out;
-      pointer-events: none;
-    `;
-
-    const inner = document.createElement("div");
-    inner.style.cssText = `
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      width: ${size}px;
-      height: ${size}px;
-      border-radius: 50%;
-      background: #10b981;
-      border: 2px solid #fff;
-      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
-      pointer-events: none;
-    `;
-
-    container.appendChild(outer);
-    container.appendChild(inner);
-
-    // Ensure keyframes exist
-    if (!document.getElementById("naver-current-pulse-style")) {
+    // Add pulse animation keyframes
+    if (!document.getElementById("naver-current-location-pulse")) {
       const style = document.createElement("style");
-      style.id = "naver-current-pulse-style";
+      style.id = "naver-current-location-pulse";
       style.textContent = `
-        @keyframes pulse {
-          0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.6; }
-          70% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
-          100% { transform: translate(-50%, -50%) scale(1.6); opacity: 0; }
+        @keyframes current-location-ripple {
+          0% { 
+            transform: translate(-50%, -50%) scale(0.6);
+            opacity: 0.8;
+          }
+          100% { 
+            transform: translate(-50%, -50%) scale(2.8);
+            opacity: 0;
+          }
+        }
+        @keyframes current-location-pulse {
+          0% { 
+            transform: translate(-50%, -50%) scale(0.5);
+            opacity: 1;
+          }
+          100% { 
+            transform: translate(-50%, -50%) scale(2.2);
+            opacity: 0;
+          }
         }
       `;
       document.head.appendChild(style);
     }
+
+    // Outer large ripple effect (숨쉬는 효과)
+    const ripple = document.createElement("div");
+    ripple.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: rgba(21, 93, 252, 0.2);
+      animation: current-location-ripple 2.5s ease-out infinite;
+      pointer-events: none;
+    `;
+
+    // Middle pulsing ring
+    const pulse = document.createElement("div");
+    pulse.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 100%;
+      height: 100%;
+      border-radius: 50%;
+      background: rgba(21, 93, 252, 0.12);
+      animation: current-location-pulse 2s infinite ease-out;
+      pointer-events: none;
+    `;
+
+    // Inner circle (center point)
+    const center = document.createElement("div");
+    center.style.cssText = `
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: #155DFC;
+      border: 2.5px solid #fff;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 12px rgba(21, 93, 252, 0.6);
+      pointer-events: none;
+      z-index: 2;
+    `;
+
+    container.appendChild(ripple);
+    container.appendChild(pulse);
+    container.appendChild(center);
 
     return container;
   };
@@ -353,8 +389,8 @@ export function MapView({
             position,
             map,
             icon: {
-              content: createCurrentLocationContent(18),
-              anchor: new window.naver.maps.Point(9, 9),
+              content: createCurrentLocationContent(CURRENT_LOCATION_SIZE),
+              anchor: new window.naver.maps.Point(CURRENT_LOCATION_ANCHOR_X, CURRENT_LOCATION_ANCHOR_Y),
             },
             clickable: false,
             zIndex: 9999,
@@ -363,33 +399,9 @@ export function MapView({
         } else {
           currentLocationMarkerRef.current.setPosition(position);
           currentLocationMarkerRef.current.setIcon({
-            content: createCurrentLocationContent(18),
-            anchor: new window.naver.maps.Point(9, 9),
+            content: createCurrentLocationContent(CURRENT_LOCATION_SIZE),
+            anchor: new window.naver.maps.Point(CURRENT_LOCATION_ANCHOR_X, CURRENT_LOCATION_ANCHOR_Y),
           });
-        }
-
-        // Optionally update accuracy circle using naver.maps.Circle if available
-        try {
-          if (pos.coords.accuracy && window.naver?.maps) {
-            const radius = pos.coords.accuracy; // meters
-            if (!accuracyCircleRef.current) {
-              accuracyCircleRef.current = new window.naver.maps.Circle({
-                map,
-                center: position,
-                radius,
-                strokeColor: "rgba(16,185,129,0.2)",
-                strokeOpacity: 0.8,
-                strokeWeight: 1,
-                fillColor: "rgba(16,185,129,0.06)",
-                fillOpacity: 0.6,
-              });
-            } else {
-              accuracyCircleRef.current.setCenter(position);
-              accuracyCircleRef.current.setRadius(radius);
-            }
-          }
-        } catch (e) {
-          // ignore if naver.maps.Circle is not available
         }
       },
       (err) => {
@@ -409,12 +421,6 @@ export function MapView({
         currentLocationMarkerRef.current.setMap(null);
       } catch (e) { }
       currentLocationMarkerRef.current = null;
-    }
-    if (accuracyCircleRef.current) {
-      try {
-        accuracyCircleRef.current.setMap(null);
-      } catch (e) { }
-      accuracyCircleRef.current = null;
     }
   };
 
@@ -500,7 +506,7 @@ export function MapView({
           map,
           icon: {
             content: markerContent,
-            anchor: new window.naver.maps.Point(18, 36),
+            anchor: new window.naver.maps.Point(18, 18),
           },
           title: station.name,
         });
@@ -519,7 +525,7 @@ export function MapView({
           const newContent = createIndividualMarkerContent(station, true);
           marker.setIcon({
             content: newContent,
-            anchor: new window.naver.maps.Point(18, 36),
+            anchor: new window.naver.maps.Point(18, 18),
           });
         });
 
@@ -528,7 +534,7 @@ export function MapView({
           const newContent = createIndividualMarkerContent(station, false);
           marker.setIcon({
             content: newContent,
-            anchor: new window.naver.maps.Point(18, 36),
+            anchor: new window.naver.maps.Point(18, 18),
           });
         });
 
@@ -551,16 +557,16 @@ export function MapView({
 
         // Determine marker size based on zoom
         let anchorX = 18;
-        let anchorY = 36;
+        let anchorY = 18;
         if (zoom >= 12) {
           anchorX = 18;
-          anchorY = 36;
+          anchorY = 18;
         } else if (zoom >= 11) {
           anchorX = 16;
-          anchorY = 32;
+          anchorY = 16;
         } else {
           anchorX = 14;
-          anchorY = 28;
+          anchorY = 14;
         }
 
         const markerContent = createClusterMarkerContent(
