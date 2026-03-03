@@ -88,6 +88,10 @@ export default function Home() {
             mapRef.current.setCenter(new window.naver.maps.LatLng(latitude, longitude));
             mapRef.current.setZoom(15);
           }
+          // Request Map to start continuous geolocation (show marker)
+          try {
+            window.dispatchEvent(new CustomEvent("naver-start-geolocation"));
+          } catch (e) { }
           toast.success("현재 위치로 이동했습니다");
         },
         () => {
@@ -96,6 +100,9 @@ export default function Home() {
             mapRef.current.setCenter(new window.naver.maps.LatLng(37.5665, 126.9780));
             mapRef.current.setZoom(12);
           }
+          try {
+            window.dispatchEvent(new CustomEvent("naver-stop-geolocation"));
+          } catch (e) { }
           toast.info("위치 권한이 없어 서울 중심으로 이동합니다");
         }
       );
