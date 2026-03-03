@@ -109,12 +109,6 @@ export default function Home() {
     }
   }, []);
 
-  const stationCounts = {
-    available: stations.filter(s => s.status === "available").length,
-    partial: stations.filter(s => s.status === "partial").length,
-    occupied: stations.filter(s => s.status === "occupied").length,
-  };
-
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-slate-100">
       {/* ─── Full-Screen Map ─── */}
@@ -171,40 +165,6 @@ export default function Home() {
         >
           <Layers className="w-4.5 h-4.5" />
         </button>
-      </div>
-
-      {/* ─── Bottom Status Bar ─── */}
-      <div className="absolute bottom-6 left-4 z-20">
-        <div
-          className="flex items-center gap-1 px-4 py-2.5 rounded-2xl bg-white/95 backdrop-blur-md shadow-xl border border-white/60"
-          style={{ boxShadow: "0 8px 32px rgba(0,0,0,0.12)" }}
-        >
-          {/* Total count */}
-          <div className="flex items-center gap-1.5 pr-3 border-r border-slate-200">
-            <Zap className="w-3.5 h-3.5 text-blue-600" fill="currentColor" />
-            <span className="text-xs font-bold text-slate-700">
-              {isLoadingStations ? "검색 중..." : `충전소 ${stations.length}개`}
-            </span>
-          </div>
-
-          {/* Available */}
-          <div className="flex items-center gap-1.5 px-3 border-r border-slate-200">
-            <div className="w-2 h-2 rounded-full bg-emerald-500" />
-            <span className="text-xs text-slate-600">이용가능 <strong className="text-emerald-600">{stationCounts.available}</strong></span>
-          </div>
-
-          {/* Partial */}
-          <div className="flex items-center gap-1.5 px-3 border-r border-slate-200">
-            <div className="w-2 h-2 rounded-full bg-amber-500" />
-            <span className="text-xs text-slate-600">일부가능 <strong className="text-amber-600">{stationCounts.partial}</strong></span>
-          </div>
-
-          {/* Occupied */}
-          <div className="flex items-center gap-1.5 pl-3">
-            <div className="w-2 h-2 rounded-full bg-red-500" />
-            <span className="text-xs text-slate-600">만석 <strong className="text-red-600">{stationCounts.occupied}</strong></span>
-          </div>
-        </div>
       </div>
 
       {/* ─── Map Loading Overlay ─── */}
