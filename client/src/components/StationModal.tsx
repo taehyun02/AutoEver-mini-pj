@@ -202,23 +202,14 @@ export default function StationModal({ station, onClose }: StationModalProps) {
 
     // 연속된 시간 슬롯의 시작과 끝 계산
     const sortedSlots = [...selectedSlots].sort((a, b) => a - b);
-    const startHour = sortedSlots[0];
-    const endHour = sortedSlots[sortedSlots.length - 1] + 1; // 종료 시간은 마지막 슬롯 + 1
-
-    // 시간을 ISO 8601 형식으로 변환 (오늘 날짜 기준)
-    const today = new Date();
-    today.setHours(startHour, 0, 0, 0);
-    const start_dt = today.toISOString();
-
-    const endDate = new Date(today);
-    endDate.setHours(endHour, 0, 0, 0);
-    const end_dt = endDate.toISOString();
+    const startDt = sortedSlots[0];
+    const endDt = sortedSlots[sortedSlots.length - 1] + 1; // 종료 시간은 마지막 슬롯 + 1
 
     const requestBody = {
       stat_id: station.id,
       user_id: cleanPhone,
-      start_dt,
-      end_dt,
+      start_dt: startDt,
+      end_dt: endDt,
     };
 
     setIsSubmitting(true);
@@ -240,7 +231,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
       console.log("예약 요청:", requestBody);
       console.log("예약 응답:", apiResponse);
 
-      const timeRange = `${String(startHour).padStart(2, "0")}:00 ~ ${String(endHour).padStart(2, "0")}:00`;
+      const timeRange = `${String(startDt).padStart(2, "0")}:00 ~ ${String(endDt).padStart(2, "0")}:00`;
 
       toast.success(`${apiResponse.message} ${timeRange}`, {
         description: `${station.name} · 예약번호: ${apiResponse.reserv_id.slice(-8)}`,
