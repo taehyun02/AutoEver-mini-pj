@@ -17,7 +17,7 @@ import { MapView } from "@/components/Map";
 import DistrictDropdown from "@/components/DistrictDropdown";
 import StationModal from "@/components/StationModal";
 import { EV_STATIONS, ChargingStation, SeoulDistrict } from "@/lib/data";
-import { fetchStationsByDistrict } from "@/lib/api";
+import { fetchStationsInBounds, Bounds } from "@/lib/api";
 import { Zap, Search, Layers, Navigation, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -28,6 +28,7 @@ export default function Home() {
   const [selectedDistrict, setSelectedDistrict] = useState<SeoulDistrict | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const [stations, setStations] = useState<ChargingStation[]>(EV_STATIONS); // 초기값으로 Mock 데이터 사용
+  const fetchTimeoutRef = useRef<number | null>(null);
   const [isLoadingStations, setIsLoadingStations] = useState(false);
 
   // Listen for marker click events from MapView
@@ -47,36 +48,52 @@ export default function Home() {
     setMapReady(true);
   }, []);
 
-  const handleDistrictSelect = useCallback(async (district: SeoulDistrict) => {
+  const handleDistrictSelect = useCallback((district: SeoulDistrict) => {
     setSelectedDistrict(district);
 
-    // 지도 이동
+    // 지도 이동만 수행하면 bounds 콜백이 자동으로 호출되어 데이터를 불러옵니다
     if (mapRef.current && window.naver) {
       mapRef.current.setCenter(new window.naver.maps.LatLng(district.lat, district.lng));
       mapRef.current.setZoom(district.zoom);
     }
+  }, []);
 
-    // API로 충전소 검색
-    setIsLoadingStations(true);
-    try {
-      const fetchedStations = await fetchStationsByDistrict(district.name);
-      setStations(fetchedStations);
-      toast.success(`${district.name}으로 이동했습니다`, {
-        description: `충전소 ${fetchedStations.length}개를 찾았습니다`,
-        duration: 2000,
-      });
-    } catch (error) {
-      // API 실패 시 Mock 데이터로 펴백
-      console.error("Failed to fetch stations:", error);
-      const filteredStations = EV_STATIONS.filter(() => Math.random() > 0.3); // 임시 Mock
-      setStations(filteredStations.length > 0 ? filteredStations : EV_STATIONS);
-      toast.success(`${district.name}으로 이동했습니다`, {
-        description: `해당 지역의 충전소를 확인하세요`,
-        duration: 2000,
-      });
-    } finally {
-      setIsLoadingStations(false);
+  const handleBoundsChanged = useCallback((bounds: Bounds) => {
+    console.log("[HOME] Bounds changed", bounds);
+    // debounce to avoid excessive requests while user is panning/zooming
+    if (fetchTimeoutRef.current) {
+      window.clearTimeout(fetchTimeoutRef.current);
     }
+    fetchTimeoutRef.current = window.setTimeout(async () => {
+      setIsLoadingStations(true);
+      try {
+        const fetched = await fetchStationsInBounds(bounds);
+        console.log("[HOME] Fetched stations count:", fetched?.length ?? 0);
+        if (fetched && fetched.length > 0) {
+          setStations(fetched);
+        } else {
+          // Empty result - fallback to mock data
+          console.log("[HOME] Fetch returned empty, falling back to mock data");
+          setStations(EV_STATIONS);
+        }
+      } catch (err) {
+        console.error("[HOME] bounds fetch failed", err);
+        // fallback to mock data if error
+        console.log("[HOME] Falling back to mock data due to error");
+        setStations(EV_STATIONS);
+      } finally {
+        setIsLoadingStations(false);
+      }
+    }, 300);
+  }, []);
+
+  // cleanup timer when unmounting
+  useEffect(() => {
+    return () => {
+      if (fetchTimeoutRef.current) {
+        window.clearTimeout(fetchTimeoutRef.current);
+      }
+    };
   }, []);
 
   const handleMyLocation = useCallback(() => {
@@ -118,6 +135,7 @@ export default function Home() {
         initialZoom={12}
         stations={stations}
         onMapReady={handleMapReady}
+        onBoundsChanged={handleBoundsChanged}
       />
 
       {/* ─── Top Left Controls ─── */}
@@ -190,6 +208,13 @@ export default function Home() {
               ))}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ─── Stations Fetching Indicator ─── */}
+      {isLoadingStations && (
+        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+          <div className="px-3 py-1 bg-white/90 rounded-lg shadow">충전소 정보를 불러오는 중...</div>
         </div>
       )}
 
