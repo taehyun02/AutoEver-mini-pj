@@ -27,7 +27,7 @@ export interface ChargerType {
 
 export interface TimeSlot {
   hour: number;
-  status: "available" | "occupied" | "selected" | "past";
+  status: "available" | "occupied" | "selected" | "past" | "reserved";
 }
 
 export interface SeoulDistrict {
