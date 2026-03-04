@@ -202,8 +202,8 @@ export default function StationModal({ station, onClose }: StationModalProps) {
 
     // 연속된 시간 슬롯의 시작과 끝 계산
     const sortedSlots = [...selectedSlots].sort((a, b) => a - b);
-    const startDt = sortedSlots[0];
-    const endDt = sortedSlots[sortedSlots.length - 1] + 1; // 종료 시간은 마지막 슬롯 + 1
+    const startDt = String(sortedSlots[0]);
+    const endDt = String(sortedSlots[sortedSlots.length - 1] + 1); // 종료 시간은 마지막 슬롯 + 1
 
     const requestBody = {
       stat_id: station.id,
