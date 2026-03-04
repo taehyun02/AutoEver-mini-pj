@@ -84,3 +84,42 @@ export async function fetchStationsByDistrict(
         throw new Error("네트워크 오류가 발생했습니다.");
     }
 }
+
+// Fetch stations inside given viewport bounds to avoid loading entire dataset
+export interface Bounds {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+}
+
+export async function fetchStationsInBounds(
+    bounds: Bounds
+): Promise<ChargingStation[]> {
+    const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+    const { north, south, east, west } = bounds;
+
+    try {
+        const response = await fetch(
+            `${API_BASE_URL}/wattup/map/bounds?north=${north}&south=${south}&east=${east}&west=${west}`,
+            {
+                method: "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+            }
+        );
+
+        if (!response.ok) {
+            throw new Error("충전소 정보를 불러오는데 실패했습니다.");
+        }
+
+        const data = (await response.json()) as { stations: StationFromAPI[] };
+        return data.stations.map(convertAPIStationToChargingStation);
+    } catch (error) {
+        if (error instanceof Error) {
+            throw error;
+        }
+        throw new Error("네트워크 오류가 발생했습니다.");
+    }
+}

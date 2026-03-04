@@ -22,6 +22,15 @@ interface MapViewProps {
   stations?: ChargingStation[];
   onMapReady?: (map: any) => void;
   onStationClick?: (station: ChargingStation) => void;
+  // When zoom level is below this number markers will be clustered instead
+  clusterMinZoom?: number;
+  // called whenever the map viewport settles (after pan/zoom)
+  onBoundsChanged?: (bounds: {
+    north: number;
+    south: number;
+    east: number;
+    west: number;
+  }) => void;
 }
 
 const STATUS_COLORS = {
@@ -42,6 +51,8 @@ export function MapView({
   stations = [],
   onMapReady,
   onStationClick,
+  clusterMinZoom = 14,
+  onBoundsChanged,
 }: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<any>(null);
@@ -81,6 +92,41 @@ export function MapView({
 
           // Add markers for all stations
           addMarkers(map, map.getZoom());
+
+          // notify parent about initial bounds (only if available)
+          if (onBoundsChanged) {
+            const b = map.getBounds();
+            if (b) {
+              const ne = b.getNorthEast ? b.getNorthEast() : b.ne;
+              const sw = b.getSouthWest ? b.getSouthWest() : b.sw;
+              if (ne && sw) {
+                onBoundsChanged({
+                  north: ne.y,
+                  south: sw.y,
+                  east: ne.x,
+                  west: sw.x,
+                });
+              }
+            }
+          }
+
+          // Listen for idle event (pan/zoom finished) to report bounds
+          if (onBoundsChanged) {
+            window.naver.maps.Event.addListener(map, "idle", () => {
+              const b = map.getBounds();
+              if (!b) return;
+              const ne = b.getNorthEast ? b.getNorthEast() : b.ne;
+              const sw = b.getSouthWest ? b.getSouthWest() : b.sw;
+              if (ne && sw) {
+                onBoundsChanged({
+                  north: ne.y,
+                  south: sw.y,
+                  east: ne.x,
+                  west: sw.x,
+                });
+              }
+            });
+          }
 
           // Start geolocation marker
           startGeolocation(map);
@@ -479,6 +525,7 @@ export function MapView({
 
   const addMarkers = useCallback((map: any, zoom: number) => {
     // Clear existing markers
+    console.log("[MAP] addMarkers called with zoom=", zoom, "stations count=", stations.length, "clusterMinZoom=", clusterMinZoom);
     markersRef.current.forEach((marker: any) => marker.setMap(null));
     markersRef.current = [];
 
@@ -495,7 +542,7 @@ export function MapView({
       document.head.appendChild(styleElement);
     }
 
-    if (zoom >= 14) {
+    if (zoom >= clusterMinZoom) {
       // Show individual markers for all stations
       stations.forEach((station) => {
         const position = new window.naver.maps.LatLng(station.lat, station.lng);
@@ -509,10 +556,12 @@ export function MapView({
             anchor: new window.naver.maps.Point(18, 18),
           },
           title: station.name,
+          clickable: true,
         });
 
         // Click event
         window.naver.maps.Event.addListener(marker, "click", () => {
+          console.log("[MAP] Individual marker clicked:", station.name, station.id);
           if (onStationClick) {
             onStationClick(station);
           }
@@ -585,12 +634,29 @@ export function MapView({
           title: `${cluster.stations.length} stations - ${cluster.availableStationCount} available`,
         });
 
-        // Click event - show info about clustered stations
+        // Click event - show info about clustered stations and zoom one step
         window.naver.maps.Event.addListener(marker, "click", () => {
+          console.log("[MAP] Cluster marker clicked: stations count =", cluster.stations.length);
           // If only one station in cluster, show that station's details
           if (cluster.stations.length === 1 && onStationClick) {
             onStationClick(cluster.stations[0]);
           }
+
+          // step-zoom towards cluster center instead of jumping straight to bounds
+          if (map && cluster.stations.length > 1) {
+            const centerLat = cluster.position.lat;
+            const centerLng = cluster.position.lng;
+            const prevZoom = map.getZoom();
+            map.setCenter(new window.naver.maps.LatLng(centerLat, centerLng));
+            // increase by one level, but do not exceed maxZoom if available
+            const nextZoom = prevZoom + 1;
+            if (map.getMaxZoom && nextZoom > map.getMaxZoom()) {
+              map.setZoom(map.getMaxZoom());
+            } else {
+              map.setZoom(nextZoom);
+            }
+          }
+
           window.dispatchEvent(
             new CustomEvent("naver-cluster-click", {
               detail: cluster.stations,
