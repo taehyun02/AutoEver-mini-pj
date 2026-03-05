@@ -17,7 +17,7 @@ import { MapView } from "@/components/Map";
 import DistrictDropdown from "@/components/DistrictDropdown";
 import StationModal from "@/components/StationModal";
 import { ChargingStation, SeoulDistrict } from "@/lib/data";
-import { fetchStationsInBounds, Bounds } from "@/lib/api";
+import { fetchStationsByDistrict } from "@/lib/api";
 import { Zap, Search, Layers, Navigation, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -48,51 +48,25 @@ export default function Home() {
     setMapReady(true);
   }, []);
 
-  const handleDistrictSelect = useCallback((district: SeoulDistrict) => {
+  const handleDistrictSelect = useCallback(async (district: SeoulDistrict) => {
     setSelectedDistrict(district);
-
-    // 지도 이동만 수행하면 bounds 콜백이 자동으로 호출되어 데이터를 불러옵니다
     if (mapRef.current && window.naver) {
       mapRef.current.setCenter(new window.naver.maps.LatLng(district.lat, district.lng));
       mapRef.current.setZoom(district.zoom);
     }
+    setIsLoadingStations(true);
+    try {
+      const fetched = await fetchStationsByDistrict(district.name);
+      setStations(fetched ?? []);
+    } catch (err) {
+      toast.error("충전소 정보를 불러오는데 실패했습니다.");
+      setStations([]);
+    } finally {
+      setIsLoadingStations(false);
+    }
   }, []);
 
-  const handleBoundsChanged = useCallback((bounds: Bounds) => {
-    console.log("[HOME] Bounds changed", bounds);
-    // debounce to avoid excessive requests while user is panning/zooming
-    if (fetchTimeoutRef.current) {
-      window.clearTimeout(fetchTimeoutRef.current);
-    }
-    fetchTimeoutRef.current = window.setTimeout(async () => {
-      console.log("[HOME] Starting API call: fetchStationsInBounds");
-      console.log("[HOME] API_BASE_URL:", import.meta.env.VITE_API_URL || "/api");
-      console.log("[HOME] Request bounds:", bounds);
-      setIsLoadingStations(true);
-      try {
-        const fetched = await fetchStationsInBounds(bounds);
-        console.log("[HOME] API call successful");
-        console.log("[HOME] Fetched stations count:", fetched?.length ?? 0);
-        if (fetched && fetched.length > 0) {
-          setStations(fetched);
-          console.log("[HOME] Stations updated with fetched data");
-        } else {
-          // Empty result - fallback to empty array
-          console.log("[HOME] Fetch returned empty, keeping empty array");
-          setStations([]);
-        }
-      } catch (err) {
-        console.error("[HOME] API call failed:", err);
-        console.error("[HOME] Error details:", err instanceof Error ? err.message : err);
-        // fallback to empty array if error
-        console.log("[HOME] Keeping empty array due to error");
-        setStations([]);
-      } finally {
-        setIsLoadingStations(false);
-        console.log("[HOME] API call completed");
-      }
-    }, 300);
-  }, []);
+
 
   // cleanup timer when unmounting
   useEffect(() => {
@@ -142,7 +116,6 @@ export default function Home() {
         initialZoom={12}
         stations={stations}
         onMapReady={handleMapReady}
-        onBoundsChanged={handleBoundsChanged}
       />
 
       {/* ─── Top Left Controls ─── */}

@@ -93,41 +93,6 @@ export function MapView({
           // Add markers for all stations
           addMarkers(map, map.getZoom());
 
-          // notify parent about initial bounds (only if available)
-          if (onBoundsChanged) {
-            const b = map.getBounds();
-            if (b) {
-              const ne = b.getNorthEast ? b.getNorthEast() : b.ne;
-              const sw = b.getSouthWest ? b.getSouthWest() : b.sw;
-              if (ne && sw) {
-                onBoundsChanged({
-                  north: ne.y,
-                  south: sw.y,
-                  east: ne.x,
-                  west: sw.x,
-                });
-              }
-            }
-          }
-
-          // Listen for idle event (pan/zoom finished) to report bounds
-          if (onBoundsChanged) {
-            window.naver.maps.Event.addListener(map, "idle", () => {
-              const b = map.getBounds();
-              if (!b) return;
-              const ne = b.getNorthEast ? b.getNorthEast() : b.ne;
-              const sw = b.getSouthWest ? b.getSouthWest() : b.sw;
-              if (ne && sw) {
-                onBoundsChanged({
-                  north: ne.y,
-                  south: sw.y,
-                  east: ne.x,
-                  west: sw.x,
-                });
-              }
-            });
-          }
-
           // Start geolocation marker
           startGeolocation(map);
         }
@@ -156,6 +121,89 @@ export function MapView({
       window.removeEventListener("naver-stop-geolocation", handleStop);
     };
   }, [initialCenter, initialZoom, onMapReady]);
+
+  // Separate effect for bounds change listener to avoid stale closure
+  useEffect(() => {
+    if (!mapLoaded || !mapRef.current || !onBoundsChanged) return;
+
+    const map = mapRef.current;
+
+    // Listen for idle event (pan/zoom finished) to report bounds
+    const idleListener = window.naver.maps.Event.addListener(map, "idle", () => {
+      console.log("[MAP] idle event fired");
+      const b = map.getBounds();
+      console.log("[MAP] raw bounds:", b);
+      console.log("[MAP] bounds keys:", b ? Object.keys(b) : "null");
+      if (!b) {
+        console.log("[MAP] no bounds available");
+        return;
+      }
+      const ne = b._ne;
+      const sw = b._sw;
+      console.log("[MAP] ne:", ne, "sw:", sw);
+      if (ne && sw) {
+        console.log("[MAP] bounds changed:", { north: ne.y, south: sw.y, east: ne.x, west: sw.x });
+        onBoundsChanged({
+          north: ne.y,
+          south: sw.y,
+          east: ne.x,
+          west: sw.x,
+        });
+      } else {
+        console.log("[MAP] invalid bounds data");
+      }
+    });
+
+    // Also listen for bounds_changed event as fallback
+    const boundsChangedListener = window.naver.maps.Event.addListener(map, "bounds_changed", () => {
+      console.log("[MAP] bounds_changed event fired");
+      const b = map.getBounds();
+      console.log("[MAP] raw bounds (bounds_changed):", b);
+      console.log("[MAP] bounds keys (bounds_changed):", b ? Object.keys(b) : "null");
+      if (!b) {
+        console.log("[MAP] no bounds available");
+        return;
+      }
+      const ne = b._ne;
+      const sw = b._sw;
+      console.log("[MAP] ne (bounds_changed):", ne, "sw (bounds_changed):", sw);
+      if (ne && sw) {
+        console.log("[MAP] bounds changed (bounds_changed):", { north: ne.y, south: sw.y, east: ne.x, west: sw.x });
+        onBoundsChanged({
+          north: ne.y,
+          south: sw.y,
+          east: ne.x,
+          west: sw.x,
+        });
+      } else {
+        console.log("[MAP] invalid bounds data");
+      }
+    });
+
+    // Initial bounds notification
+    const b = map.getBounds();
+    console.log("[MAP] initial bounds raw:", b);
+    console.log("[MAP] initial bounds keys:", b ? Object.keys(b) : "null");
+    if (b) {
+      const ne = b._ne;
+      const sw = b._sw;
+      console.log("[MAP] initial ne:", ne, "initial sw:", sw);
+      if (ne && sw) {
+        console.log("[MAP] initial bounds:", { north: ne.y, south: sw.y, east: ne.x, west: sw.x });
+        onBoundsChanged({
+          north: ne.y,
+          south: sw.y,
+          east: ne.x,
+          west: sw.x,
+        });
+      }
+    }
+
+    return () => {
+      window.naver.maps.Event.removeListener(idleListener);
+      window.naver.maps.Event.removeListener(boundsChangedListener);
+    };
+  }, [mapLoaded, onBoundsChanged]);
 
   const createIndividualMarkerContent = (station: ChargingStation, isHovered: boolean = false) => {
     const colors = STATUS_COLORS[station.status];
