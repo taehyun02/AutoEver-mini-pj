@@ -16,7 +16,7 @@ import { useRef, useState, useEffect, useCallback } from "react";
 import { MapView } from "@/components/Map";
 import DistrictDropdown from "@/components/DistrictDropdown";
 import StationModal from "@/components/StationModal";
-import { EV_STATIONS, ChargingStation, SeoulDistrict } from "@/lib/data";
+import { ChargingStation, SeoulDistrict } from "@/lib/data";
 import { fetchStationsInBounds, Bounds } from "@/lib/api";
 import { Zap, Search, Layers, Navigation, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -27,7 +27,7 @@ export default function Home() {
   const [selectedStation, setSelectedStation] = useState<ChargingStation | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<SeoulDistrict | null>(null);
   const [mapReady, setMapReady] = useState(false);
-  const [stations, setStations] = useState<ChargingStation[]>(EV_STATIONS); // 초기값으로 Mock 데이터 사용
+  const [stations, setStations] = useState<ChargingStation[]>([]); // 초기값으로 빈 배열 사용
   const fetchTimeoutRef = useRef<number | null>(null);
   const [isLoadingStations, setIsLoadingStations] = useState(false);
 
@@ -65,24 +65,31 @@ export default function Home() {
       window.clearTimeout(fetchTimeoutRef.current);
     }
     fetchTimeoutRef.current = window.setTimeout(async () => {
+      console.log("[HOME] Starting API call: fetchStationsInBounds");
+      console.log("[HOME] API_BASE_URL:", import.meta.env.VITE_API_URL || "/api");
+      console.log("[HOME] Request bounds:", bounds);
       setIsLoadingStations(true);
       try {
         const fetched = await fetchStationsInBounds(bounds);
+        console.log("[HOME] API call successful");
         console.log("[HOME] Fetched stations count:", fetched?.length ?? 0);
         if (fetched && fetched.length > 0) {
           setStations(fetched);
+          console.log("[HOME] Stations updated with fetched data");
         } else {
-          // Empty result - fallback to mock data
-          console.log("[HOME] Fetch returned empty, falling back to mock data");
-          setStations(EV_STATIONS);
+          // Empty result - fallback to empty array
+          console.log("[HOME] Fetch returned empty, keeping empty array");
+          setStations([]);
         }
       } catch (err) {
-        console.error("[HOME] bounds fetch failed", err);
-        // fallback to mock data if error
-        console.log("[HOME] Falling back to mock data due to error");
-        setStations(EV_STATIONS);
+        console.error("[HOME] API call failed:", err);
+        console.error("[HOME] Error details:", err instanceof Error ? err.message : err);
+        // fallback to empty array if error
+        console.log("[HOME] Keeping empty array due to error");
+        setStations([]);
       } finally {
         setIsLoadingStations(false);
+        console.log("[HOME] API call completed");
       }
     }, 300);
   }, []);

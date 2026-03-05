@@ -12,7 +12,7 @@ import {
   ZapOff, AlertCircle
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { ChargingStation, TimeSlot, generateTimeSlots } from "@/lib/data";
+import { ChargingStation, TimeSlot } from "@/lib/data";
 import { toast } from "sonner";
 import { fetchStationReservations, Reservation } from "@/lib/api";
 
@@ -39,19 +39,26 @@ export default function StationModal({ station, onClose }: StationModalProps) {
 
   useEffect(() => {
     if (station) {
-      setTimeSlots(generateTimeSlots(station.id));
+      setTimeSlots([]);
       setSelectedSlots([]);
       setStartHour(null);
       setPhone("");
 
       // Load reservation data
       const loadReservations = async () => {
+        console.log("[MODAL] Starting API call: fetchStationReservations");
+        console.log("[MODAL] API_BASE_URL:", import.meta.env.VITE_API_URL || "/api");
+        console.log("[MODAL] Station ID:", station.id);
         try {
           const data = await fetchStationReservations(station.id);
+          console.log("[MODAL] API call successful");
+          console.log("[MODAL] Fetched reservations count:", data?.length ?? 0);
           setReservations(data);
         } catch (error) {
-          console.error("예약 데이터 로드 실패:", error);
+          console.error("[MODAL] API call failed:", error);
+          console.error("[MODAL] Error details:", error instanceof Error ? error.message : error);
           // API가 구현되지 않은 경우 빈 배열로 처리
+          console.log("[MODAL] Setting empty reservations array due to error");
           setReservations([]);
         }
       };
