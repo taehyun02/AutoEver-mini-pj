@@ -14,6 +14,7 @@ import {
 import { cn } from "@/lib/utils";
 import { ChargingStation, TimeSlot, generateTimeSlots } from "@/lib/data";
 import { toast } from "sonner";
+import { fetchStationReservations, Reservation } from "@/lib/api";
 
 interface StationModalProps {
   station: ChargingStation | null;
@@ -34,6 +35,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
   const [startHour, setStartHour] = useState<number | null>(null); // 시작 시간
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
 
   useEffect(() => {
     if (station) {
@@ -41,8 +43,58 @@ export default function StationModal({ station, onClose }: StationModalProps) {
       setSelectedSlots([]);
       setStartHour(null);
       setPhone("");
+
+      // Load reservation data
+      const loadReservations = async () => {
+        try {
+          const data = await fetchStationReservations(station.id);
+          setReservations(data);
+        } catch (error) {
+          console.error("예약 데이터 로드 실패:", error);
+          // API가 구현되지 않은 경우 빈 배열로 처리
+          setReservations([]);
+        }
+      };
+
+      loadReservations();
     }
   }, [station]);
+
+  // Update time slots based on loaded reservation data
+  useEffect(() => {
+    if (!station || timeSlots.length === 0 || reservations.length === 0) return;
+
+    setTimeSlots(prev => {
+      const updated = [...prev];
+
+      // Get reserved hours from reservations
+      const reservedHours = new Set<number>();
+      reservations.forEach(reservation => {
+        const startDate = new Date(reservation.start_dt);
+        const endDate = new Date(reservation.end_dt);
+        const startHour = startDate.getHours();
+        const endHour = endDate.getHours();
+
+        // Mark all hours in the reservation range as reserved
+        for (let h = startHour; h < endHour; h++) {
+          reservedHours.add(h);
+        }
+      });
+
+      // Update time slots with reserved status
+      return updated.map(slot => {
+        // Don't override past or occupied status
+        if (slot.status === "past" || slot.status === "occupied" || slot.status === "selected") {
+          return slot;
+        }
+        // Set reserved status for hours with reservations
+        if (reservedHours.has(slot.hour)) {
+          return { ...slot, status: "reserved" };
+        }
+        return slot;
+      });
+    });
+  }, [reservations, station]);
 
   // 매 분마다 현재 시간 기준으로 시간 슬롯 업데이트 (지남 상태 반영)
   useEffect(() => {
@@ -55,8 +107,8 @@ export default function StationModal({ station, onClose }: StationModalProps) {
         if (slot.hour < currentHour && slot.status !== "past") {
           return { ...slot, status: "past" };
         }
-        // 현재 시간이 되면 occupied로 변경 (선택된 상태는 유지)
-        if (slot.hour === currentHour && slot.status === "available") {
+        // 현재 시간이 되면 occupied로 변경
+        if (slot.hour === currentHour && slot.status !== "past" && slot.status !== "reserved" && slot.status !== "selected") {
           return { ...slot, status: "occupied" };
         }
         return slot;
@@ -84,7 +136,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
 
   const toggleSlot = (hour: number) => {
     const slot = timeSlots.find(s => s.hour === hour);
-    if (!slot || slot.status === "occupied" || slot.status === "past") return;
+    if (!slot || slot.status === "occupied" || slot.status === "past" || slot.status === "reserved") return;
 
     // 이미 선택된 범위를 클릭하면 초기화
     if (selectedSlots.length > 0 && selectedSlots.includes(hour)) {
@@ -150,8 +202,8 @@ export default function StationModal({ station, onClose }: StationModalProps) {
 
     // 연속된 시간 슬롯의 시작과 끝 계산
     const sortedSlots = [...selectedSlots].sort((a, b) => a - b);
-    const startDt = sortedSlots[0];
-    const endDt = sortedSlots[sortedSlots.length - 1] + 1; // 종료 시간은 마지막 슬롯 + 1
+    const startDt = String(sortedSlots[0]);
+    const endDt = String(sortedSlots[sortedSlots.length - 1] + 1); // 종료 시간은 마지막 슬롯 + 1
 
     const requestBody = {
       stat_id: station.id,
@@ -379,6 +431,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
             {timeSlots.map((slot) => {
               const isPast = slot.status === "past";
               const isOccupied = slot.status === "occupied";
+              const isReserved = slot.status === "reserved";
               const isSelected = slot.status === "selected";
               const isAvailable = slot.status === "available";
 
@@ -386,13 +439,14 @@ export default function StationModal({ station, onClose }: StationModalProps) {
                 <button
                   key={slot.hour}
                   onClick={() => toggleSlot(slot.hour)}
-                  disabled={isPast || isOccupied}
+                  disabled={isPast || isOccupied || isReserved}
                   className={cn(
                     "time-slot-btn relative py-2 px-1 rounded-lg text-xs font-medium",
                     "border transition-all duration-150",
                     "flex flex-col items-center justify-center gap-0.5",
                     isPast && "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed",
                     isOccupied && "bg-red-50 border-red-200 text-red-400 cursor-not-allowed",
+                    isReserved && "bg-red-50 border-red-200 text-red-400 cursor-not-allowed",
                     isAvailable && "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400",
                     isSelected && "bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-200"
                   )}
@@ -401,11 +455,11 @@ export default function StationModal({ station, onClose }: StationModalProps) {
                   <span className={cn(
                     "text-[9px]",
                     isPast && "text-slate-200",
-                    isOccupied && "text-red-300",
+                    (isOccupied || isReserved) && "text-red-300",
                     isAvailable && "text-emerald-500",
                     isSelected && "text-blue-100"
                   )}>
-                    {isPast ? "지남" : isOccupied ? "예약됨" : isSelected ? "선택" : "가능"}
+                    {isPast ? "지남" : isOccupied || isReserved ? "예약됨" : isSelected ? "선택" : "가능"}
                   </span>
                   {isSelected && (
                     <div className="absolute top-0.5 right-0.5 w-3 h-3 bg-white/30 rounded-full flex items-center justify-center">
