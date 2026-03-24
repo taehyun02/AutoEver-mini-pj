@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     environment {
-        IMAGE_NAME = 'my-backend'
-        IMAGE_REPO = 'taehyun02/my-backend'
+        IMAGE_NAME = 'my-backend-pipeline'
+        IMAGE_REPO = 'taehyun02/my-backend-pipeline'
     }
 
     stages {
