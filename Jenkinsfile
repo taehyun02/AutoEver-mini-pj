@@ -77,24 +77,26 @@ pipeline {
             }
         }
 
-stage('Commit and Push Manifest') {
-    steps {
-        dir('manifest-repo') {
-            withCredentials([usernamePassword(
-                credentialsId: 'github-token-userpass',
-                usernameVariable: 'GIT_USER',
-                passwordVariable: 'GIT_TOKEN'
-            )]) {
-                sh '''
-                git config user.email "${GIT_EMAIL}"
-                git config user.name "${GIT_NAME}"
+        stage('Commit and Push Manifest') {
+            steps {
+                dir('manifest-repo') {
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github-token-userpass',
+                        usernameVariable: 'GIT_USER',
+                        passwordVariable: 'GIT_TOKEN'
+                    )]) {
+                        sh '''
+                        git config user.email "${GIT_EMAIL}"
+                        git config user.name "${GIT_NAME}"
 
-                git add backend/deployment.yaml
-                git commit -m "Update backend image to ${IMAGE_REPO}:${BUILD_NUMBER}" || true
+                        git add backend/deployment.yaml
+                        git commit -m "Update backend image to ${IMAGE_REPO}:${BUILD_NUMBER}" || true
 
-                git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git
-                git push origin HEAD:main
-                '''
+                        git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git
+                        git push origin HEAD:main
+                        '''
+                    }
+                }
             }
         }
     }
