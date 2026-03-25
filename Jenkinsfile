@@ -85,7 +85,7 @@ pipeline {
                     git config user.name "${GIT_NAME}"
                     git add backend/deployment.yaml
                     git commit -m "Update backend image to ${IMAGE_REPO}:${BUILD_NUMBER}" || true
-                    git push
+                    git push origin HEAD:main
                     '''
                 }
             }
