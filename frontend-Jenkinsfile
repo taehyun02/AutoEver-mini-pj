@@ -10,31 +10,30 @@ pipeline {
     }
 
     stages {
-        stage('Checkout') {
+
+        stage('Checkout Source') {
             steps {
-                echo 'Checking out source code...'
+                echo 'Checking out frontend source...'
                 checkout scm
             }
         }
 
-        stage('Check Directory') {
+        stage('Check Directory Structure') {
             steps {
-                echo 'Current workspace:'
+                echo 'Workspace 확인'
                 sh 'pwd'
                 sh 'ls -al'
-                sh 'ls -al frontend'
             }
         }
 
         stage('Build Frontend Image') {
             steps {
-                dir('frontend') {
-                    sh '''
-                    docker build -t ${IMAGE_NAME}:latest .
-                    docker tag ${IMAGE_NAME}:latest ${IMAGE_REPO}:latest
-                    docker tag ${IMAGE_NAME}:latest ${IMAGE_REPO}:${BUILD_NUMBER}
-                    '''
-                }
+                echo 'Frontend Docker 이미지 빌드 시작'
+                sh '''
+                docker build -t ${IMAGE_NAME}:latest .
+                docker tag ${IMAGE_NAME}:latest ${IMAGE_REPO}:latest
+                docker tag ${IMAGE_NAME}:latest ${IMAGE_REPO}:${BUILD_NUMBER}
+                '''
             }
         }
 
@@ -58,7 +57,7 @@ pipeline {
         stage('Clone Manifest Repo') {
             steps {
                 dir('manifest-repo') {
-                    git branch: 'FE',
+                    git branch: 'main',
                         credentialsId: 'github-token-userpass',
                         url: "${MANIFEST_REPO}"
                 }
@@ -70,7 +69,7 @@ pipeline {
                 dir('manifest-repo') {
                     sh '''
                     sed -i "s|image: .*|image: ${IMAGE_REPO}:${BUILD_NUMBER}|g" frontend/deployment.yaml
-                    echo "===== updated deployment.yaml ====="
+                    echo "===== updated frontend deployment.yaml ====="
                     cat frontend/deployment.yaml
                     '''
                 }
@@ -80,20 +79,22 @@ pipeline {
         stage('Commit and Push Manifest') {
             steps {
                 dir('manifest-repo') {
+
                     withCredentials([usernamePassword(
                         credentialsId: 'github-token-userpass',
                         usernameVariable: 'GIT_USER',
                         passwordVariable: 'GIT_TOKEN'
                     )]) {
+
                         sh '''
                         git config user.email "${GIT_EMAIL}"
                         git config user.name "${GIT_NAME}"
 
                         git add frontend/deployment.yaml
-                        git commit -m "Update backend image to ${IMAGE_REPO}:${BUILD_NUMBER}" || true
+                        git commit -m "Update frontend image to ${IMAGE_REPO}:${BUILD_NUMBER}" || true
 
                         git remote set-url origin https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git
-                        git push origin HEAD:FE
+                        git push origin HEAD:main
                         '''
                     }
                 }
