@@ -1,0 +1,55 @@
+pipeline {
+    agent any
+
+    environment {
+        IMAGE_NAME = 'my-debezium-pipeline'
+        IMAGE_REPO = 'taehyun02/my-debezium-pipeline'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out debezium source code...'
+                checkout scm
+            }
+        }
+
+        stage('Check Directory') {
+            steps {
+                echo 'Current workspace:'
+                sh 'pwd'
+                sh 'ls -al'
+                sh 'ls -al debezium'
+            }
+        }
+
+        stage('Build Debezium Image') {
+            steps {
+                dir('debezium') {
+                    sh '''
+                    docker build -t ${IMAGE_NAME}:latest .
+                    docker tag ${IMAGE_NAME}:latest ${IMAGE_REPO}:latest
+                    docker tag ${IMAGE_NAME}:latest ${IMAGE_REPO}:${BUILD_NUMBER}
+                    '''
+                }
+            }
+        }
+
+        stage('Push Debezium Image') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh '''
+                    echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                    docker push ${IMAGE_REPO}:latest
+                    docker push ${IMAGE_REPO}:${BUILD_NUMBER}
+                    docker logout
+                    '''
+                }
+            }
+        }
+    }
+}
