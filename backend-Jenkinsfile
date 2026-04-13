@@ -105,30 +105,16 @@ pipeline {
 
         stage('Deploy To Kubernetes') {
             steps {
-                withCredentials([
-                    usernamePassword(
-                        credentialsId: 'master-ssh-userpass',
-                        usernameVariable: 'MASTER_USER',
-                        passwordVariable: 'MASTER_PASS'
-                    ),
-                    usernamePassword(
-                        credentialsId: 'github-token-userpass',
-                        usernameVariable: 'GIT_USER',
-                        passwordVariable: 'GIT_TOKEN'
-                    )
-                ]) {
+                withCredentials([usernamePassword(
+                    credentialsId: 'master-ssh-userpass',
+                    usernameVariable: 'MASTER_USER',
+                    passwordVariable: 'MASTER_PASS'
+                )]) {
                     sh '''
+                    sshpass -p "$MASTER_PASS" ssh -p ${MASTER_SSH_PORT} -o StrictHostKeyChecking=no ${MASTER_USER}@host.docker.internal "mkdir -p ${MASTER_MANIFEST_DIR}/backend"
+                    sshpass -p "$MASTER_PASS" scp -P ${MASTER_SSH_PORT} -o StrictHostKeyChecking=no -r manifest-repo/backend/* ${MASTER_USER}@host.docker.internal:${MASTER_MANIFEST_DIR}/backend/
                     sshpass -p "$MASTER_PASS" ssh -p ${MASTER_SSH_PORT} -o StrictHostKeyChecking=no ${MASTER_USER}@host.docker.internal "
                         set -e
-
-                        if [ ! -d '${MASTER_MANIFEST_DIR}/.git' ]; then
-                            git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git ${MASTER_MANIFEST_DIR}
-                        else
-                            cd ${MASTER_MANIFEST_DIR}
-                            git fetch origin
-                            git checkout main
-                            git pull https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git main
-                        fi
 
                         cd ${MASTER_MANIFEST_DIR}
                         kubectl apply -f backend/ -n wattup
