@@ -7,7 +7,8 @@ pipeline {
         MANIFEST_REPO = 'https://github.com/taehyun02/wattup-my-manifest.git'
         GIT_EMAIL = 'jenkins@local'
         GIT_NAME = 'jenkins'
-        MASTER_HOST = 'taehyun@10.0.2.10'
+        MASTER_HOST = 'taehyun@host.docker.internal'
+        MASTER_SSH_PORT = '20000'
         MASTER_MANIFEST_DIR = '/home/taehyun/wattup-my-manifest'
     }
 
@@ -111,7 +112,7 @@ pipeline {
                     passwordVariable: 'GIT_TOKEN'
                 )]) {
                     sh '''
-                    ssh -o StrictHostKeyChecking=no ${MASTER_HOST} "
+                    ssh -p ${MASTER_SSH_PORT} -o StrictHostKeyChecking=no ${MASTER_HOST} "
                         set -e
 
                         if [ ! -d '${MASTER_MANIFEST_DIR}/.git' ]; then
