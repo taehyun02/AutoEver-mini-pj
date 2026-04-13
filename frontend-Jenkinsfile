@@ -7,6 +7,8 @@ pipeline {
         MANIFEST_REPO = 'https://github.com/taehyun02/wattup-my-manifest.git'
         GIT_EMAIL = 'jenkins@local'
         GIT_NAME = 'jenkins'
+        MASTER_HOST = 'taehyun@10.0.2.10'
+        MASTER_MANIFEST_DIR = '/home/taehyun/wattup-my-manifest'
     }
 
     stages {
@@ -97,6 +99,35 @@ pipeline {
                         git push origin HEAD:main
                         '''
                     }
+                }
+            }
+        }
+
+        stage('Deploy To Kubernetes') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-token-userpass',
+                    usernameVariable: 'GIT_USER',
+                    passwordVariable: 'GIT_TOKEN'
+                )]) {
+                    sh '''
+                    ssh -o StrictHostKeyChecking=no ${MASTER_HOST} "
+                        set -e
+
+                        if [ ! -d '${MASTER_MANIFEST_DIR}/.git' ]; then
+                            git clone https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git ${MASTER_MANIFEST_DIR}
+                        else
+                            cd ${MASTER_MANIFEST_DIR}
+                            git fetch origin
+                            git checkout main
+                            git pull https://${GIT_USER}:${GIT_TOKEN}@github.com/taehyun02/wattup-my-manifest.git main
+                        fi
+
+                        cd ${MASTER_MANIFEST_DIR}
+                        kubectl apply -f frontend/ -n wattup
+                        kubectl rollout status deploy/frontend -n wattup
+                    "
+                    '''
                 }
             }
         }
