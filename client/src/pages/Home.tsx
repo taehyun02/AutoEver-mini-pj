@@ -119,7 +119,7 @@ export default function Home() {
       />
 
       {/* ─── Top Left Controls ─── */}
-      <div className="absolute top-4 left-4 z-20 flex flex-col gap-2">
+      <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
         {/* Brand Logo */}
         <div className="flex items-center gap-2.5 px-3.5 py-2 bg-blue-600 rounded-xl shadow-lg shadow-blue-500/30">
           <div className="w-6 h-6 bg-white/20 rounded-lg flex items-center justify-center">
@@ -139,7 +139,7 @@ export default function Home() {
       </div>
 
       {/* ─── Top Right Controls ─── */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2">
+      <div className="absolute top-4 right-4 z-[1000] flex flex-col gap-2">
         {/* Search Button */}
         <button
           onClick={() => toast.info("검색 기능은 준비 중입니다")}
@@ -167,7 +167,7 @@ export default function Home() {
 
       {/* ─── Map Loading Overlay ─── */}
       {!mapReady && (
-        <div className="absolute inset-0 z-40 bg-slate-100 flex items-center justify-center">
+        <div className="absolute inset-0 z-[1100] bg-slate-100 flex items-center justify-center">
           <div className="flex flex-col items-center gap-4">
             <div className="w-16 h-16 bg-blue-600 rounded-2xl flex items-center justify-center shadow-xl shadow-blue-300">
               <Zap className="w-8 h-8 text-white" fill="white" />
@@ -193,7 +193,7 @@ export default function Home() {
 
       {/* ─── Stations Fetching Indicator ─── */}
       {isLoadingStations && (
-        <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 z-30">
+        <div className="absolute bottom-4 left-1/2 z-[1050] -translate-x-1/2 transform">
           <div className="px-3 py-1 bg-white/90 rounded-lg shadow">충전소 정보를 불러오는 중...</div>
         </div>
       )}
@@ -203,10 +203,10 @@ export default function Home() {
         <>
           {/* Backdrop */}
           <div
-            className="absolute inset-0 z-40 bg-black/10 backdrop-blur-[1px]"
+            className="absolute inset-0 z-[1150] bg-black/10 backdrop-blur-[1px]"
             onClick={() => setSelectedStation(null)}
           />
-          <div className="absolute inset-y-0 right-0 z-50">
+          <div className="absolute inset-y-0 right-0 z-[1200]">
             <StationModal
               station={selectedStation}
               onClose={() => setSelectedStation(null)}
