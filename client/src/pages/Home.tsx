@@ -1,17 +1,3 @@
-// Home.tsx - EV Charging Station Reservation Platform
-// Design: Modern Cartographic Theme
-// - Full-screen Naver Map as background
-// - Floating UI panels over the map
-// - Left top: District dropdown
-// - Right side: Station detail modal (slide-in)
-// - Map pins with status colors and pulse animation
-
-declare global {
-  interface Window {
-    naver?: any;
-  }
-}
-
 import { useRef, useState, useEffect, useCallback } from "react";
 import { MapView } from "@/components/Map";
 import DistrictDropdown from "@/components/DistrictDropdown";
@@ -23,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
 export default function Home() {
-  const mapRef = useRef<any>(null); // naver.maps.Map
+  const mapRef = useRef<any>(null);
   const [selectedStation, setSelectedStation] = useState<ChargingStation | null>(null);
   const [selectedDistrict, setSelectedDistrict] = useState<SeoulDistrict | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -50,8 +36,8 @@ export default function Home() {
 
   const handleDistrictSelect = useCallback(async (district: SeoulDistrict) => {
     setSelectedDistrict(district);
-    if (mapRef.current && window.naver) {
-      mapRef.current.setCenter(new window.naver.maps.LatLng(district.lat, district.lng));
+    if (mapRef.current) {
+      mapRef.current.setCenter({ lat: district.lat, lng: district.lng });
       mapRef.current.setZoom(district.zoom);
     }
     setIsLoadingStations(true);
@@ -82,8 +68,8 @@ export default function Home() {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords;
-          if (mapRef.current && window.naver) {
-            mapRef.current.setCenter(new window.naver.maps.LatLng(latitude, longitude));
+          if (mapRef.current) {
+            mapRef.current.setCenter({ lat: latitude, lng: longitude });
             mapRef.current.setZoom(15);
           }
           // Request Map to start continuous geolocation (show marker)
@@ -94,8 +80,8 @@ export default function Home() {
         },
         () => {
           // Fallback to Seoul center
-          if (mapRef.current && window.naver) {
-            mapRef.current.setCenter(new window.naver.maps.LatLng(37.5665, 126.9780));
+          if (mapRef.current) {
+            mapRef.current.setCenter({ lat: 37.5665, lng: 126.9780 });
             mapRef.current.setZoom(12);
           }
           try {
