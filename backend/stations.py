@@ -22,16 +22,12 @@ def get_stations_by_gu(regionName: str, db: Session = Depends(get_pg)):
         """
         SELECT stat_id, stat_nm, addr, lat, lng
         FROM ev_station
-        WHERE addr LIKE :seoul
-          AND addr LIKE :gu
+        WHERE gu_name = :gu
         ORDER BY stat_nm ASC
     """
     )
 
-    rows = db.execute(
-        query,
-        {"seoul": "%서울특별시%", "gu": f"%{regionName}%"},
-    ).fetchall()
+    rows = db.execute(query, {"gu": regionName}).fetchall()
 
     # 검색 결과가 없을 때도 200 + 빈 배열로 반환
     stations = []
