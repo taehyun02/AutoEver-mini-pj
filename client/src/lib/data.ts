@@ -58,13 +58,11 @@ export const SEOUL_DISTRICTS: SeoulDistrict[] = [
   { name: "송파구", lat: 37.5145, lng: 127.1059, zoom: 14 },
   { name: "양천구", lat: 37.5270, lng: 126.8561, zoom: 14 },
   { name: "영등포구", lat: 37.5264, lng: 126.8963, zoom: 14 },
-  { name: "용산구", lat: 37.5311, lng: 126.9810, zoom: 14 },
+  { name: "용산구", lat: 37.5311, lng: 126.981, zoom: 14 },
   { name: "은평구", lat: 37.6026, lng: 126.9291, zoom: 14 },
   { name: "종로구", lat: 37.5729, lng: 126.9793, zoom: 14 },
-  { name: "중구", lat: 37.5640, lng: 126.9975, zoom: 14 },
+  { name: "중구", lat: 37.564, lng: 126.9975, zoom: 14 },
   { name: "중랑구", lat: 37.6063, lng: 127.0927, zoom: 14 },
 ];
 
 export const EV_STATIONS: ChargingStation[] = [];
-
-
