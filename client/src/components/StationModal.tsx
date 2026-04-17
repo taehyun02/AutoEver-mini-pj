@@ -5,12 +5,8 @@
 // - 4x6 time slot grid (00:00 - 24:00)
 // - Reservation form with check button
 
-import { useState, useEffect } from "react";
-import {
-  X, Clock, Zap, Star, MapPin, ChevronRight,
-  Check, Phone, Calendar, Info,
-  ZapOff, AlertCircle
-} from "lucide-react";
+import { useEffect, useState } from "react";
+import { X, Clock, Zap, Star, MapPin, Check, Phone, Calendar, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ChargingStation, TimeSlot } from "@/lib/data";
 import { toast } from "sonner";
@@ -29,169 +25,168 @@ const CHARGER_TYPE_COLORS: Record<string, { bg: string; text: string; border: st
   "DC차데모": { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
 };
 
+function buildBaseTimeSlots(now: Date = new Date()): TimeSlot[] {
+  const currentHour = now.getHours();
+
+  return Array.from({ length: 24 }, (_, hour) => {
+    if (hour < currentHour) {
+      return { hour, status: "past" as const };
+    }
+
+    if (hour === currentHour) {
+      return { hour, status: "occupied" as const };
+    }
+
+    return { hour, status: "available" as const };
+  });
+}
+
+function applyReservationStatuses(
+  baseSlots: TimeSlot[],
+  reservations: Reservation[],
+  selectedHours: number[] = []
+): TimeSlot[] {
+  const reservedHours = new Set<number>();
+
+  reservations.forEach((reservation) => {
+    const startHour = new Date(reservation.start_dt).getHours();
+    const endHour = new Date(reservation.end_dt).getHours();
+
+    for (let hour = startHour; hour < endHour; hour += 1) {
+      reservedHours.add(hour);
+    }
+  });
+
+  return baseSlots.map((slot) => {
+    if (selectedHours.includes(slot.hour)) {
+      return { ...slot, status: "selected" };
+    }
+
+    if (reservedHours.has(slot.hour) && slot.status !== "past" && slot.status !== "occupied") {
+      return { ...slot, status: "reserved" };
+    }
+
+    return slot;
+  });
+}
+
 export default function StationModal({ station, onClose }: StationModalProps) {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [selectedSlots, setSelectedSlots] = useState<number[]>([]);
-  const [startHour, setStartHour] = useState<number | null>(null); // 시작 시간
+  const [startHour, setStartHour] = useState<number | null>(null);
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reservations, setReservations] = useState<Reservation[]>([]);
 
   useEffect(() => {
-    if (station) {
-      setTimeSlots([]);
-      setSelectedSlots([]);
-      setStartHour(null);
-      setPhone("");
-
-      // Load reservation data
-      const loadReservations = async () => {
-        console.log("[MODAL] Starting API call: fetchStationReservations");
-        console.log("[MODAL] API_BASE_URL:", import.meta.env.VITE_API_URL || "/api");
-        console.log("[MODAL] Station ID:", station.id);
-        try {
-          const data = await fetchStationReservations(station.id);
-          console.log("[MODAL] API call successful");
-          console.log("[MODAL] Fetched reservations count:", data?.length ?? 0);
-          setReservations(data);
-        } catch (error) {
-          console.error("[MODAL] API call failed:", error);
-          console.error("[MODAL] Error details:", error instanceof Error ? error.message : error);
-          // API가 구현되지 않은 경우 빈 배열로 처리
-          console.log("[MODAL] Setting empty reservations array due to error");
-          setReservations([]);
-        }
-      };
-
-      loadReservations();
+    if (!station) {
+      return;
     }
-  }, [station]);
 
-  // Update time slots based on loaded reservation data
-  useEffect(() => {
-    if (!station || timeSlots.length === 0 || reservations.length === 0) return;
+    setSelectedSlots([]);
+    setStartHour(null);
+    setPhone("");
+    setReservations([]);
+    setTimeSlots(buildBaseTimeSlots());
 
-    setTimeSlots(prev => {
-      const updated = [...prev];
-
-      // Get reserved hours from reservations
-      const reservedHours = new Set<number>();
-      reservations.forEach(reservation => {
-        const startDate = new Date(reservation.start_dt);
-        const endDate = new Date(reservation.end_dt);
-        const startHour = startDate.getHours();
-        const endHour = endDate.getHours();
-
-        // Mark all hours in the reservation range as reserved
-        for (let h = startHour; h < endHour; h++) {
-          reservedHours.add(h);
-        }
-      });
-
-      // Update time slots with reserved status
-      return updated.map(slot => {
-        // Don't override past or occupied status
-        if (slot.status === "past" || slot.status === "occupied" || slot.status === "selected") {
-          return slot;
-        }
-        // Set reserved status for hours with reservations
-        if (reservedHours.has(slot.hour)) {
-          return { ...slot, status: "reserved" };
-        }
-        return slot;
-      });
-    });
-  }, [reservations, station]);
-
-  // 매 분마다 현재 시간 기준으로 시간 슬롯 업데이트 (지남 상태 반영)
-  useEffect(() => {
-    if (!station) return;
-
-    const updateTimeSlotsForCurrentTime = () => {
-      const currentHour = new Date().getHours();
-      setTimeSlots(prev => prev.map(slot => {
-        // 이미 지난 시간이면 past로 변경
-        if (slot.hour < currentHour && slot.status !== "past") {
-          return { ...slot, status: "past" };
-        }
-        // 현재 시간이 되면 occupied로 변경
-        if (slot.hour === currentHour && slot.status !== "past" && slot.status !== "reserved" && slot.status !== "selected") {
-          return { ...slot, status: "occupied" };
-        }
-        return slot;
-      }));
-      // 지난 시간 선택 해제
-      setSelectedSlots(prev => prev.filter(h => h > currentHour));
-      setStartHour(prev => (prev !== null && prev <= currentHour) ? null : prev);
+    const loadReservations = async () => {
+      try {
+        const data = await fetchStationReservations(station.id);
+        setReservations(data);
+      } catch (error) {
+        console.error("[MODAL] reservation fetch failed", error);
+        setReservations([]);
+      }
     };
 
-    // 다음 정시까지 남은 시간 계산
-    const now = new Date();
-    const msUntilNextHour = (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000;
-
-    // 다음 정시에 첫 업데이트 후 매 시간마다 업데이트
-    const timeout = setTimeout(() => {
-      updateTimeSlotsForCurrentTime();
-      const interval = setInterval(updateTimeSlotsForCurrentTime, 60 * 60 * 1000);
-      return () => clearInterval(interval);
-    }, msUntilNextHour);
-
-    return () => clearTimeout(timeout);
+    loadReservations();
   }, [station]);
 
-  if (!station) return null;
+  useEffect(() => {
+    if (!station) {
+      return;
+    }
+
+    const updateTimeSlots = () => {
+      const baseSlots = buildBaseTimeSlots();
+      const validSelectedSlots = selectedSlots.filter((hour) => {
+        const slot = baseSlots.find((candidate) => candidate.hour === hour);
+        return slot?.status === "available";
+      });
+
+      setSelectedSlots(validSelectedSlots);
+      setStartHour((prev) => (prev !== null && validSelectedSlots.includes(prev) ? prev : null));
+      setTimeSlots(applyReservationStatuses(baseSlots, reservations, validSelectedSlots));
+    };
+
+    updateTimeSlots();
+
+    const now = new Date();
+    const msUntilNextHour =
+      (60 - now.getMinutes()) * 60 * 1000 - now.getSeconds() * 1000 - now.getMilliseconds();
+
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    const timeoutId = setTimeout(() => {
+      updateTimeSlots();
+      intervalId = setInterval(updateTimeSlots, 60 * 60 * 1000);
+    }, msUntilNextHour);
+
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [station, reservations, selectedSlots]);
+
+  if (!station) {
+    return null;
+  }
 
   const toggleSlot = (hour: number) => {
-    const slot = timeSlots.find(s => s.hour === hour);
-    if (!slot || slot.status === "occupied" || slot.status === "past" || slot.status === "reserved") return;
+    const slot = timeSlots.find((candidate) => candidate.hour === hour);
+    if (!slot || slot.status === "occupied" || slot.status === "past" || slot.status === "reserved") {
+      return;
+    }
 
-    // 이미 선택된 범위를 클릭하면 초기화
     if (selectedSlots.length > 0 && selectedSlots.includes(hour)) {
       setSelectedSlots([]);
       setStartHour(null);
-      setTimeSlots(ts => ts.map(s =>
-        s.status === "selected" ? { ...s, status: "available" } : s
-      ));
+      setTimeSlots(applyReservationStatuses(buildBaseTimeSlots(), reservations));
       return;
     }
 
     if (startHour === null) {
-      // 첫 번째 클릭: 시작 시간 설정
       setStartHour(hour);
       setSelectedSlots([hour]);
-      setTimeSlots(ts => ts.map(s =>
-        s.hour === hour ? { ...s, status: "selected" } :
-          s.status === "selected" ? { ...s, status: "available" } : s
-      ));
-    } else {
-      // 두 번째 클릭: 시작~끝 사이의 모든 시간 선택
-      const minHour = Math.min(startHour, hour);
-      const maxHour = Math.max(startHour, hour);
-
-      // 범위 내에 occupied나 past 슬롯이 있는지 확인
-      const hasBlockedSlot = timeSlots.some(s =>
-        s.hour >= minHour && s.hour <= maxHour && (s.status === "occupied" || s.status === "past")
-      );
-
-      if (hasBlockedSlot) {
-        toast.error("선택한 범위 내에 예약 불가능한 시간이 있습니다.");
-        return;
-      }
-
-      // 범위 내 모든 시간 선택
-      const newSelectedSlots: number[] = [];
-      for (let h = minHour; h <= maxHour; h++) {
-        newSelectedSlots.push(h);
-      }
-
-      setSelectedSlots(newSelectedSlots);
-      setStartHour(null); // 선택 완료 후 리셋
-      setTimeSlots(ts => ts.map(s => ({
-        ...s,
-        status: newSelectedSlots.includes(s.hour) ? "selected" :
-          (s.status === "selected" ? "available" : s.status)
-      })));
+      setTimeSlots(applyReservationStatuses(buildBaseTimeSlots(), reservations, [hour]));
+      return;
     }
+
+    const minHour = Math.min(startHour, hour);
+    const maxHour = Math.max(startHour, hour);
+    const hasBlockedSlot = timeSlots.some(
+      (candidate) =>
+        candidate.hour >= minHour &&
+        candidate.hour <= maxHour &&
+        (candidate.status === "occupied" ||
+          candidate.status === "past" ||
+          candidate.status === "reserved")
+    );
+
+    if (hasBlockedSlot) {
+      toast.error("선택한 범위 내에 예약 불가능한 시간이 있습니다.");
+      return;
+    }
+
+    const nextSelectedSlots = Array.from(
+      { length: maxHour - minHour + 1 },
+      (_, index) => minHour + index
+    );
+
+    setSelectedSlots(nextSelectedSlots);
+    setStartHour(null);
+    setTimeSlots(applyReservationStatuses(buildBaseTimeSlots(), reservations, nextSelectedSlots));
   };
 
   const handleSubmit = async () => {
@@ -200,17 +195,15 @@ export default function StationModal({ station, onClose }: StationModalProps) {
       return;
     }
 
-    // 전화번호 검증 (숫자만, 10-11자리)
     const cleanPhone = phone.replace(/[^0-9]/g, "");
     if (!cleanPhone || cleanPhone.length < 10 || cleanPhone.length > 11) {
       toast.error("올바른 연락처를 입력해주세요.");
       return;
     }
 
-    // 연속된 시간 슬롯의 시작과 끝 계산
     const sortedSlots = [...selectedSlots].sort((a, b) => a - b);
-    const startDt = String(sortedSlots[0]);
-    const endDt = String(sortedSlots[sortedSlots.length - 1] + 1); // 종료 시간은 마지막 슬롯 + 1
+    const startDt = sortedSlots[0];
+    const endDt = sortedSlots[sortedSlots.length - 1] + 1;
 
     const requestBody = {
       stat_id: station.id,
@@ -222,44 +215,54 @@ export default function StationModal({ station, onClose }: StationModalProps) {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch('/api/wattup/reservations', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+      const response = await fetch("/api/wattup/reservations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(requestBody),
       });
 
+      const responseBody = await response.json();
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || '예약 요청에 실패했습니다.');
+        throw new Error(responseBody.detail || responseBody.error || "예약 요청에 실패했습니다.");
       }
 
-      const apiResponse = await response.json();
+      const nextReservations: Reservation[] = [
+        ...reservations,
+        {
+          reserv_id: responseBody.reserv_id,
+          user_id: cleanPhone,
+          start_dt: new Date(2000, 0, 1, startDt).toISOString(),
+          end_dt: new Date(2000, 0, 1, endDt).toISOString(),
+          status: responseBody.status ?? "READY",
+        },
+      ];
 
-      console.log("예약 요청:", requestBody);
-      console.log("예약 응답:", apiResponse);
+      setReservations(nextReservations);
+      setSelectedSlots([]);
+      setStartHour(null);
+      setTimeSlots(applyReservationStatuses(buildBaseTimeSlots(), nextReservations));
 
       const timeRange = `${String(startDt).padStart(2, "0")}:00 ~ ${String(endDt).padStart(2, "0")}:00`;
-
-      toast.success(`${apiResponse.message} ${timeRange}`, {
-        description: `${station.name} · 예약번호: ${apiResponse.reserv_id.slice(-8)}`,
+      toast.success(`예약이 완료되었습니다. ${timeRange}`, {
+        description: `${station.name} · 예약번호: ${String(responseBody.reserv_id).slice(-8)}`,
         duration: 4000,
       });
-
-      onClose();
     } catch (error) {
-      toast.error("예약 중 오류가 발생했습니다. 다시 시도해주세요.");
+      const message =
+        error instanceof Error ? error.message : "예약 중 오류가 발생했습니다. 다시 시도해주세요.";
+      toast.error(message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const formatHour = (h: number) => `${String(h).padStart(2, "0")}:00`;
+  const formatHour = (hour: number) => `${String(hour).padStart(2, "0")}:00`;
 
   const statusConfig = {
     available: { label: "이용 가능", color: "text-emerald-600", bg: "bg-emerald-500" },
     partial: { label: "일부 사용 중", color: "text-amber-600", bg: "bg-amber-500" },
     occupied: { label: "만석", color: "text-red-600", bg: "bg-red-500" },
-  };
+  } as const;
 
   const stationStatus = statusConfig[station.status];
 
@@ -272,22 +275,20 @@ export default function StationModal({ station, onClose }: StationModalProps) {
         "modal-slide-in"
       )}
       style={{
-        boxShadow: "-8px 0 40px rgba(0,0,0,0.12), -2px 0 8px rgba(0,0,0,0.06)"
+        boxShadow: "-8px 0 40px rgba(0,0,0,0.12), -2px 0 8px rgba(0,0,0,0.06)",
       }}
     >
-      {/* ─── Header ─── */}
       <div className="relative flex-shrink-0">
-        {/* Station Photo */}
         <div className="relative h-44 overflow-hidden bg-slate-200 flex items-center justify-center">
           {station.photo ? (
             <img
               src={station.photo}
               alt={station.name}
               className="w-full h-full object-cover"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement;
+              onError={(event) => {
+                const target = event.target as HTMLImageElement;
                 target.src = "/default-station.jpg";
-                target.onerror = null; // Infinite loop prevention
+                target.onerror = null;
               }}
             />
           ) : (
@@ -299,7 +300,6 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/10 to-transparent" />
 
-          {/* Close Button */}
           <button
             onClick={onClose}
             className="absolute top-3 right-3 w-8 h-8 flex items-center justify-center rounded-full bg-black/40 backdrop-blur-sm text-white hover:bg-black/60 transition-colors"
@@ -307,19 +307,19 @@ export default function StationModal({ station, onClose }: StationModalProps) {
             <X className="w-4 h-4" />
           </button>
 
-          {/* Status Badge */}
           <div className="absolute top-3 left-3">
-            <div className={cn(
-              "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold",
-              "bg-white/90 backdrop-blur-sm",
-              stationStatus.color
-            )}>
+            <div
+              className={cn(
+                "flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold",
+                "bg-white/90 backdrop-blur-sm",
+                stationStatus.color
+              )}
+            >
               <div className={cn("w-1.5 h-1.5 rounded-full", stationStatus.bg)} />
               {stationStatus.label}
             </div>
           </div>
 
-          {/* Station Name Overlay */}
           <div className="absolute bottom-3 left-4 right-4">
             <h2 className="text-white font-bold text-lg leading-tight drop-shadow-lg">
               {station.name}
@@ -331,7 +331,6 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           </div>
         </div>
 
-        {/* Quick Info Bar */}
         <div className="flex items-center divide-x divide-slate-100 border-b border-slate-100 bg-slate-50/80">
           <div className="flex-1 flex items-center justify-center gap-1.5 py-2.5">
             <Star className="w-3.5 h-3.5 text-amber-400 fill-amber-400" />
@@ -350,10 +349,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
         </div>
       </div>
 
-      {/* ─── Scrollable Content ─── */}
       <div className="flex-1 overflow-y-auto custom-scrollbar">
-
-        {/* Charger Types Section */}
         <div className="px-4 pt-4 pb-3">
           <div className="flex items-center gap-2 mb-3">
             <Zap className="w-4 h-4 text-blue-600" />
@@ -362,16 +358,25 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           <div className="space-y-2">
             {station.chargerTypes.map((charger) => {
               const colors = CHARGER_TYPE_COLORS[charger.type] || CHARGER_TYPE_COLORS["DC콤보"];
+
               return (
                 <div
                   key={charger.type}
                   className={cn(
                     "flex items-center justify-between p-3 rounded-xl border",
-                    colors.bg, colors.border
+                    colors.bg,
+                    colors.border
                   )}
                 >
                   <div className="flex items-center gap-2.5">
-                    <div className={cn("w-7 h-7 rounded-lg flex items-center justify-center", colors.bg, "border", colors.border)}>
+                    <div
+                      className={cn(
+                        "w-7 h-7 rounded-lg flex items-center justify-center",
+                        colors.bg,
+                        "border",
+                        colors.border
+                      )}
+                    >
                       <Zap className={cn("w-3.5 h-3.5", colors.text)} />
                     </div>
                     <div>
@@ -381,7 +386,8 @@ export default function StationModal({ station, onClose }: StationModalProps) {
                   </div>
                   <div className="text-right">
                     <div className={cn("text-sm font-bold", colors.text)}>
-                      {charger.available} <span className="font-normal text-slate-400">/ {charger.count}기</span>
+                      {charger.available}{" "}
+                      <span className="font-normal text-slate-400">/ {charger.count}기</span>
                     </div>
                     <div className="text-xs text-slate-400">이용 가능</div>
                   </div>
@@ -391,12 +397,8 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           </div>
         </div>
 
-        {/* Operating Hours */}
         <div className="px-4 pb-3">
-          <div className={cn(
-            "flex items-center gap-3 p-3 rounded-xl",
-            "bg-slate-50 border border-slate-200"
-          )}>
+          <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-200">
             <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
               <Clock className="w-4 h-4 text-blue-600" />
             </div>
@@ -407,10 +409,8 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           </div>
         </div>
 
-        {/* Divider */}
         <div className="mx-4 h-px bg-slate-100" />
 
-        {/* Time Slot Grid Section */}
         <div className="px-4 pt-3 pb-3">
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -433,7 +433,6 @@ export default function StationModal({ station, onClose }: StationModalProps) {
             </div>
           </div>
 
-          {/* 4 columns × 6 rows = 24 time slots */}
           <div className="grid grid-cols-4 gap-1.5">
             {timeSlots.map((slot) => {
               const isPast = slot.status === "past";
@@ -454,18 +453,21 @@ export default function StationModal({ station, onClose }: StationModalProps) {
                     isPast && "bg-slate-50 border-slate-100 text-slate-300 cursor-not-allowed",
                     isOccupied && "bg-red-50 border-red-200 text-red-400 cursor-not-allowed",
                     isReserved && "bg-red-50 border-red-200 text-red-400 cursor-not-allowed",
-                    isAvailable && "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400",
+                    isAvailable &&
+                      "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-400",
                     isSelected && "bg-blue-500 border-blue-500 text-white shadow-md shadow-blue-200"
                   )}
                 >
                   <span className="font-bold tabular-nums">{String(slot.hour).padStart(2, "0")}</span>
-                  <span className={cn(
-                    "text-[9px]",
-                    isPast && "text-slate-200",
-                    (isOccupied || isReserved) && "text-red-300",
-                    isAvailable && "text-emerald-500",
-                    isSelected && "text-blue-100"
-                  )}>
+                  <span
+                    className={cn(
+                      "text-[9px]",
+                      isPast && "text-slate-200",
+                      (isOccupied || isReserved) && "text-red-300",
+                      isAvailable && "text-emerald-500",
+                      isSelected && "text-blue-100"
+                    )}
+                  >
                     {isPast ? "지남" : isOccupied || isReserved ? "예약됨" : isSelected ? "선택" : "가능"}
                   </span>
                   {isSelected && (
@@ -478,26 +480,24 @@ export default function StationModal({ station, onClose }: StationModalProps) {
             })}
           </div>
 
-          {/* Selected time summary */}
           {selectedSlots.length > 0 && (
             <div className="mt-2.5 p-2.5 bg-blue-50 border border-blue-200 rounded-xl">
               <div className="flex items-center gap-1.5">
                 <Check className="w-3.5 h-3.5 text-blue-600" />
                 <span className="text-xs font-semibold text-blue-700">
-                  {selectedSlots.map(h => formatHour(h)).join(", ")} 선택됨
+                  {selectedSlots.map((hour) => formatHour(hour)).join(", ")} 선택됨
                 </span>
               </div>
               <div className="text-xs text-blue-500 mt-0.5">
-                총 {selectedSlots.length}시간 · 예상 비용 {(selectedSlots.length * station.pricePerKwh * 30).toLocaleString()}원~
+                총 {selectedSlots.length}시간 · 예상 비용{" "}
+                {(selectedSlots.length * station.pricePerKwh * 30).toLocaleString()}원~
               </div>
             </div>
           )}
         </div>
 
-        {/* Divider */}
         <div className="mx-4 h-px bg-slate-100" />
 
-        {/* Reservation Form */}
         <div className="px-4 pt-3 pb-4">
           <div className="flex items-center gap-2 mb-3">
             <Info className="w-4 h-4 text-blue-600" />
@@ -505,7 +505,6 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           </div>
 
           <div className="space-y-2.5">
-            {/* Phone (user_id) */}
             <div>
               <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 mb-1">
                 <Phone className="w-3 h-3" />
@@ -514,7 +513,7 @@ export default function StationModal({ station, onClose }: StationModalProps) {
               <input
                 type="tel"
                 value={phone}
-                onChange={e => setPhone(e.target.value)}
+                onChange={(event) => setPhone(event.target.value)}
                 placeholder="01012345678"
                 maxLength={13}
                 className={cn(
@@ -530,25 +529,19 @@ export default function StationModal({ station, onClose }: StationModalProps) {
           </div>
         </div>
 
-        {/* Bottom padding for the floating button */}
         <div className="h-20" />
       </div>
 
-      {/* ─── Floating Confirm Button ─── */}
       <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-white via-white/95 to-transparent pt-8">
         <div className="flex items-center justify-between">
-          {/* Summary */}
           <div className="text-xs text-slate-500">
             {selectedSlots.length > 0 ? (
-              <span className="font-semibold text-blue-600">
-                {selectedSlots.length}시간 선택됨
-              </span>
+              <span className="font-semibold text-blue-600">{selectedSlots.length}시간 선택됨</span>
             ) : (
               <span>시간을 선택해주세요</span>
             )}
           </div>
 
-          {/* Confirm Button */}
           <button
             onClick={handleSubmit}
             disabled={isSubmitting || selectedSlots.length === 0 || !phone}
